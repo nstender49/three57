@@ -316,6 +316,7 @@ function handleGameEnd(table, tablePlayer) {
 		if (!player) {
 			continue;
 		}
+		player.tokens = 0;
 		// Reset for next game.
 		player.moved = false;
 		// Update player client.
