@@ -1,0 +1,14 @@
+{
+  "name": "three57",
+  "description": "Multiplayer 3-5-7 poker game",
+  "author": "Nathan Stender",
+  "version": "0.0.1",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "~4.13.1",
+    "socket.io": "^1.4.4"
+  }
+}

@@ -1,0 +1,9 @@
+canvas {
+	border: 1px solid black;
+	margin-top: 2vh;
+  	z-index: 0;
+}
+
+.play-guide {
+	margin: 5%;
+}
