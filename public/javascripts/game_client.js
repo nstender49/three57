@@ -182,6 +182,7 @@ function makeTable() {
 	var name = document.getElementById("player-name").value;
 	// TODO: make settings and send them here.
 	if (name) {
+		labels["player name"].text = name;
 		socket.emit("make table", name);
 	} else {
 		raiseError("Must provide name to make table!");
@@ -193,6 +194,7 @@ function joinTable() {
 	var name = document.getElementById("player-name").value;
 	var code = document.getElementById("game-code").value;
 	if (name && code) {
+		labels["player name"].text = name;
 		socket.emit("join table", code, name);
 	} else {
 		raiseError("Must provide name and table code to join table!");
