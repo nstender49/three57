@@ -81,7 +81,7 @@ function createTable(socket, name) {
 		inGame: false,
 		inRound: false,
 		settings: {
-			tokenGoal: 2,
+			tokenGoal: 5,
 			startPot: 1,
 			roundInc: 2,
 			roundMin: 3,
@@ -412,9 +412,8 @@ function findTableBySocketId(socketId) {
 function createTableCode() {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	var code = "";
-	// var charset = "ABCDEFGHIJKLMNOPQRSTUCWXYZ";
-	var charset = "A";
-	// TODO: really improbable infinite loop here...
+	var charset = "ABCDEFGHIJKLMNOPQRSTUCWXYZ";
+	// var charset = "A";
 	do {
 		code = ""
 		for (var i = 0; i < 4; i++) {
