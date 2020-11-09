@@ -312,11 +312,13 @@ function handleGameEnd(table, tablePlayer) {
 	table.inRound = false; 
 	var message = tablePlayer.name + " wins!";
 	for (var tablePlayer of table.players) {
+		tablePlayer.tokens = 0;
+	}
+	for (var tablePlayer of table.players) {
 		var player = findPlayerById(tablePlayer.id);
 		if (!player) {
 			continue;
 		}
-		player.tokens = 0;
 		// Reset for next game.
 		player.moved = false;
 		// Update player client.
