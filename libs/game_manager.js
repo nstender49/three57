@@ -476,8 +476,8 @@ function getTableBySocketId(socketId) {
 function createTableCode() {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	var code = "";
-	// var charset = "ABCDEFGHIJKLMNOPQRSTUCWXYZ";
-	var charset = "A";
+	var charset = "ABCDEFGHIJKLMNOPQRSTUCWXYZ";
+	// var charset = "A";
 	do {
 		code = ""
 		for (var i = 0; i < 4; i++) {
