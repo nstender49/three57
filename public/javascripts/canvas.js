@@ -26,9 +26,11 @@ function handleMouseMove(event) {
 				$("#game-canvas").css("cursor", "pointer");
 				clickCursor = true;
 			}
+			labels[l].focus = true;
 			return;
 		} else {
 			labels[l].down = false;
+			labels[l].focus = false;
 		}
 	}
 
@@ -51,7 +53,15 @@ function handleMouseUp(event) {
 	for (var l in labels) {
 		if (labels[l].down) {
 			labels[l].down = false;
-			labels[l].callback();
+			if (labels[l].clicked) {
+				labels[l].uncallback();
+				labels[l].clicked = false;
+			} else {
+				labels[l].callback();
+				if (labels[l].uncallback) {
+					labels[l].clicked = true;
+				}
+			}
 		}
 	}
 	handleMouseMove(event);
@@ -73,22 +83,8 @@ function isOnButton(event, label) {
 	var x = (event.pageX - canvas.offsetLeft),
 		y = (event.pageY - canvas.offsetTop);
 	if (label.callback && label.enabled) {
-		var labelWidth = label.text.length * label.size * r * 0.4;
-		var labelHeight = label.size * r;
-		if (label.align === "left") {
-			var leftBoundary = label.position.x * canvas.width;
-			var rightBoundary = label.position.x * canvas.width + labelWidth;
-		} else if (label.align === "center") {
-			var leftBoundary = label.position.x * canvas.width - labelWidth / 2;
-			var rightBoundary = label.position.x * canvas.width + labelWidth / 2;
-		}
-		var upperBoundary = label.position.y * canvas.height - labelHeight / 2;
-		var lowerBoundary = label.position.y * canvas.height + labelHeight / 2;
-
-		if (x > leftBoundary && x < rightBoundary &&
-			y > upperBoundary && y < lowerBoundary) {
-			return true;
-		}
+		buttonDims = getButtonDims(label);
+		return x >= buttonDims.left && x <= buttonDims.right && y <= buttonDims.bot && y >= buttonDims.top;
 	}
 	return false;
 }
@@ -102,19 +98,40 @@ function handleResize() {
 	} else {
 		canvas.width = window.innerHeight * 0.9 * aspect;
 		canvas.height = window.innerHeight * 0.9;
-		r = canvas.height * aspect / 1000;
+ 		r = canvas.height * aspect / 1000;
 	}
-	cardWidth = 120 * r;
-	gapWidth = 20 * r;
-	cardHeight = cardWidth * 1.5;
-	playerCardPosition = {x: canvas.width * 0.17, y: canvas.height * 0.15};
-	opponentCardPosition = {x: canvas.width * 0.83 - cardWidth * 1.5, y: canvas.height * 0.15};
+	ELEM_CONFIGS = [
+		{
+			name: "player-name",
+			x: 0.288,
+			y: 0.63,
+			w: 0.3,
+			h: 0.09,
+		},
+		{
+			name: "game-code",
+			x: 0.594,
+			y: 0.63,
+			w: 0.12,
+			h: 0.09,
+		},
+	];
+	for (var elem of ELEM_CONFIGS) {
+		var nameInput = document.getElementById(elem.name);
+		nameInput.style.position = "absolute";
+		nameInput.style.left = (canvas.getBoundingClientRect().left + canvas.width * elem.x) + "px";
+		nameInput.style.top = (canvas.getBoundingClientRect().top + canvas.height * elem.y) + "px";
+		nameInput.style.width = (canvas.width * elem.w) + "px";
+		nameInput.style.height = (canvas.height * elem.h) + "px";
+		nameInput.style.fontSize = (40 * r) + "px";
+	}
 }
 
 //////////  Drawing  \\\\\\\\\\
 
 function draw() {
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	drawRect("#eeeeee", 0, 0, 1, 1);
+	drawLabel(labels["version"]);
 	switch (gameState) {
 		case MAIN_MENU:
 			// TODO add "draw" function to label
@@ -124,10 +141,9 @@ function draw() {
 			break;
 		case AT_TABLE:
 		case IN_GAME:
+			drawTable();
 			drawLabel(labels["table"]);
 			drawLabel(labels["leave table"]);
-			drawGame();
-			drawLabel(labels["player name"]);
 			drawLabel(labels["drop"]);
 			drawLabel(labels["hold"]);
 			drawLabel(labels["pot"]);
@@ -136,54 +152,56 @@ function draw() {
 			drawLabel(labels["deal"]);
 			break;
 	}
+	drawLabel(labels["error msg"]);
 }
 
-function drawGame() {
+function drawTable() {
 	// Check table still exists, in case we have left the table.
 	if (!theTable) {
 		return;
 	}
 
-	// Draw player's hand, check for existence in case we are transitioning.
-	drawPlayer(0, 0.65, 1.0, 0.3, thePlayer.held)
-	if (theTable.inGame) {
-		var hand = hands[socket.id]
-		if (hand) {
-			drawHand(hand, 0, 0.65, 1.0, 0.3);
-		}
-	}
+	// Draw center area
+	drawRect("#bbbbbb", 0.05, 0.35, 0.2, 0.3);
+	drawRect("#999999", 0.25, 0.35, 0.5, 0.3);
+	
+	// Draw ledger
+	drawLedger();
 
 	// Draw other players.
 	var numOther = theTable.players.length - 1;
 	var cols = numOther > 2 ? 2 : 1;
 	var rows = Math.ceil(numOther / cols);
-	var colWidth = 1 / cols;
+	var colWidth = 0.9 / cols;
 	var rowHeight = 0.3 / rows;
 
 	pos = 0;
 	for (var player of theTable.players) {
 		if (player.id === socket.id) {
-			labels["money"].text = "$" + player.money;
-			drawLabel(labels["money"]);
-			labels["tokens"].text = "Tokens: " + player.tokens;
-			drawLabel(labels["tokens"]);
-			continue;
+			var x = 0.05;
+			var y = 0.65;
+			var w = 0.9;
+			var h = 0.3;
+		} else {
+			var rowIdx = Math.floor(pos / cols);
+			var colIdx = pos % cols;
+			var x = 0.05 + colWidth * colIdx;
+			var y = 0.05 + rowHeight * rowIdx;
+			var w = colWidth;
+			var h = rowHeight;
+			pos += 1;
 		}
-		var rowIdx = Math.floor(pos / cols);
-		var colIdx = pos % cols;
-		drawPlayer(colWidth * colIdx, 0.05 + rowHeight * rowIdx, colWidth, rowHeight, !theTable.inRound && player.held);
-		drawLabel(new Label({x: colWidth * (colIdx + 0.06), y: 0.1 + rowHeight * rowIdx}, player.name, 30, "left"));
-		drawLabel(new Label({x: colWidth * (colIdx + 0.06), y: 0.1 + rowHeight * (0.4 + rowIdx)}, "$" + player.money, 20, "left"));
-		drawLabel(new Label({x: colWidth * (colIdx + 0.2), y: 0.1 + rowHeight * (0.4 + rowIdx)}, "Tokens: " + player.tokens, 20, "left"));
-		if (theTable.inGame) {
-			hand = hands[player.id];
-			if (!hand) {
-				hand = makeDownHand(hands[socket.id].length, player.color);
-			}
-			drawHand(hand, colWidth * colIdx, 0.05 + rowHeight * rowIdx, colWidth, rowHeight);
-		}
-		pos += 1;
+		drawPlayerPad(player,x, y, w, h);
 	}
+}
+
+function drawRect(color, x, y, w, h) {
+	var x = canvas.width * x;
+	var y = canvas.height * y;
+	var w = canvas.width * w;
+	var h = canvas.height * h;
+	ctx.fillStyle = color;
+	ctx.fillRect(x, y, w, h);
 }
 
 function makeDownHand(length, color) {
@@ -194,35 +212,104 @@ function makeDownHand(length, color) {
 	return hand;
 }
 
-function drawPlayer(x, y, width, height, highlight = false) {
-	var absX = canvas.width * x;
-	var absY = canvas.height * y;
-	var margin = canvas.width * 0.05 * width; 
-	var nameW = canvas.width * 0.3 * width;
-	var cardW = canvas.width * 0.6 * width;
-	var absH = canvas.height * 0.9 * height;
-	ctx.fillStyle = highlight ? "#f5e076" : "#dddddd";
-	ctx.fillRect(absX + margin, absY, nameW, absH);
-	ctx.fillStyle = "#598d5a";
-	ctx.fillRect(absX + margin + nameW, absY, cardW, absH);
+function drawCircle(color, x, y, r) {
+	ctx.fillStyle = color;
+	ctx.lineWidth = 0.1;
+	ctx.beginPath();
+	ctx.arc(x, y, r, 0, 2 * Math.PI, false);
+	ctx.fill();
+	ctx.stroke();
 }
 
-function drawHand(hand, x, y, width, height) {
-	var absX = canvas.width * x;
-	var absY = canvas.height * y;
-	var margin = canvas.width * 0.05 * width; 
-	var nameW = canvas.width * 0.3 * width;
-	var cardW = canvas.width * 0.6 * width;
-	var absH = canvas.height * 0.9 * height;
+function drawPlayerPad(player, x, y, width, height) {
+	// Calculate absolute position
+	var margin = 1; 
+	var absX = canvas.width * x + margin;
+	var absY = canvas.height * y + margin;
+	var nameW = canvas.width * 0.35 * width;
+	var cardW = canvas.width * 0.65 * width - margin * 2;
+	var absH = canvas.height * height - margin * 2;
+
+	// Draw pads
+	ctx.fillStyle = !theTable.inRound && player.held ? "#f5e076" : "#dddddd";
+	ctx.fillRect(absX, absY, nameW, absH);
+	ctx.fillStyle = FELT_COLOR;
+	ctx.fillRect(absX + nameW, absY, cardW, absH);
+	var labelMargin = 5;
+
+	// Draw name with "ready" light. Adjust size to fit in name box, and then scoot down.
+	var name = new Label({x: absX + labelMargin, y: absY}, player.name, 30, "left");
+	scaleLabelsToWidth([name], nameW, labelMargin);
+	var readyMargin = 10;
+	var radius = getTextSize(name).height / 2;	
+	drawCircle(player.moved ? "green" : "red", absX + radius + labelMargin, absY + radius + labelMargin, radius);
+	scaleLabelsToWidth([name], nameW, labelMargin + readyMargin + radius);
+	name.position.x += labelMargin + readyMargin + radius; 
+	name.position.y += getTextSize(name).height + labelMargin;
+	drawLabel(name, true);
+
+	// Similarly, make sure tokens and money fit.
+	var money = new Label({x: absX + labelMargin, y: absY + absH - labelMargin}, "$" + player.money, 20, "left");
+	var tokens = new Label({x: absX - labelMargin + nameW, y: absY + absH - labelMargin}, "Tokens: " + player.tokens, 20, "right");
+	scaleLabelsToWidth([money, tokens], nameW, labelMargin);
+	drawLabel(money, true);
+	drawLabel(tokens, true);
+
+	// Draw the hand.
+	if (theTable.inGame) {
+		hand = hands[player.id];
+		if (!hand) {
+			hand = makeDownHand(hands[socket.id].length, player.color);
+		}
+		drawHand(hand, absX + nameW, absY, cardW, absH);
+	}
+}
+
+function drawLedger() {
+	// Background and title
+	drawRect(LEDGER_COLOR, 0.75, 0.35, 0.2, 0.3);
+	drawLabel(labels["ledger"]);
+
+	// Player names.
+	var absX = canvas.width * 0.75;
+	var absY = canvas.height * 0.45;
+	var absRowH = canvas.height * 0.03;
+	var absW = canvas.width * 0.2;
+	var margin = canvas.width * 0.01;
+	for (var i = 0; i < theTable.ledger.length; ++i) {
+		var l = theTable.ledger[i];
+		var nameLabel = new Label({x: absX + margin, y: absY + absRowH * i}, l.name, 15, "left");
+		var valLabel = new Label({x: absX + absW - margin, y: absY + absRowH * i}, "$"+ l.money, 15, "right");
+		scaleLabelsToWidth([nameLabel, valLabel], absW, margin)
+		drawLabel(nameLabel, true);
+		drawLabel(valLabel, true);
+	}
+}
+
+function scaleLabelsToWidth(labels, width, margin) {
+	var totalMargin = margin * (2 + labels.length - 1);
+	var totalWidth = totalMargin;
+	for (var label of labels) {
+		totalWidth += getTextSize(label).width;
+	}
+	if (totalWidth > width) {
+		var scale = (width - totalMargin) / totalWidth;
+		for (var label of labels) {
+			label.size *= scale;
+		}
+	}
+}
+
+function drawHand(hand, absX, absY, absW, absH) {
 	var cardHeight = absH * 0.9;
 	var cardWidth = cardHeight / 1.5;
 	// Gap between cards is either MIN_GAP * cardWidth, or negative to stack cards if there are too many.
 	var minGap = cardWidth * 0.1
-	var gapWidth = Math.min(minGap, (cardW - 2 * minGap - hand.length * cardWidth) / (hand.length - 1));
+	var gapWidth = Math.min(minGap, (absW - 2 * minGap - hand.length * cardWidth) / (hand.length - 1));
 	for (var i = 0; i < hand.length; i++) {
 		drawCard(
 			hand[i],
-			absX + margin + nameW + cardW / 2 - ((hand.length - 1) / 2 * gapWidth) - (hand.length / 2 * cardWidth) + (cardWidth + gapWidth) * i,
+			absX + absW / 2 - ((hand.length - 1) / 2 * gapWidth) - (hand.length / 2 * cardWidth) + (cardWidth + gapWidth) * i,
 			absY + absH * 0.05,
 			cardWidth,
 			cardHeight,
@@ -236,22 +323,76 @@ function drawCard(card, x, y, w, h) {
 	ctx.drawImage(img, x, y, w, h);
 }
 
-function drawLabel(label) {
+function getTextSize(label) {
+	ctx.font = (label.size * r) + "px " + label.font;
+	var metrics = ctx.measureText(label.msg())
+	return {
+		width: metrics.width,
+		height: metrics.actualBoundingBoxAscent,
+	}
+}
+
+function getButtonDims(label) {
+	var textSize = getTextSize(label);
+	var margin = 20 * r;
+
+	// Top left corner.
+	var minX = canvas.width * label.position.x - margin * 0.5;
+	if (label.align === "center") {
+		minX -= textSize.width / 2;
+	} else if (label.align === "right") {
+		minX -= textSize.width;
+	}
+	var minY = canvas.height * label.position.y - textSize.height - margin * 0.5;
+	var maxX = minX + textSize.width + margin;
+	var maxY = minY + textSize.height + margin;
+	
+	return {
+		left: minX,
+		right: maxX,
+		top: minY,
+		bot: maxY,
+		width: textSize.width + margin,
+		height: textSize.height + margin,
+	}
+}
+
+function drawLabel(label, absolute = false) {
+	if (!label.visible) {
+		return;
+	}
+	if (label.opacity < 1) {
+		ctx.save();
+		ctx.globalAlpha = label.opacity;
+	}
+	if (label.focus || label.clicked) {
+		ctx.strokeStyle = POKER_RED;
+		ctx.fillStyle = POKER_RED;
+	} else if (label.enabled || !label.callback) {
+		ctx.strokeStyle = "black";
+		ctx.fillStyle = "black";
+	} else {
+		ctx.strokeStyle = "grey";
+		ctx.fillStyle = "grey";
+	}
+	ctx.font = (label.size * r) + "px " + label.font;
+
+	// Draw button
+	if (label.callback) {
+		buttonDims = getButtonDims(label);
+		ctx.lineWidth = 3 * r;
+		ctx.lineJoin = "round";
+		ctx.strokeRect(buttonDims.left, buttonDims.top, buttonDims.width, buttonDims.height);
+	}
 	ctx.textBaseline = "center";
 	ctx.textAlign = label.align;
-	ctx.font = (label.size * r) + "px " + label.font;
-	var shadowDistance = label.size / 30;
-	if (label.enabled || !label.callback) {
-		ctx.fillStyle = "#9a9a9a";
-		ctx.fillText(label.text, canvas.width * label.position.x + (shadowDistance * r), canvas.height * label.position.y + (shadowDistance * r));
-		ctx.fillStyle = "#000000";
+	if (absolute) {
+		ctx.fillText(label.msg(), label.position.x, label.position.y);
 	} else {
-		ctx.fillStyle = "#9a9a9a";
+		ctx.fillText(label.msg(), canvas.width * label.position.x, canvas.height * label.position.y);
 	}
-	if (label.down) {
-		ctx.fillText(label.text, canvas.width * label.position.x + (shadowDistance * 0.5 * r), canvas.height * label.position.y + (shadowDistance * 0.5 * r));
-	} else {
-		ctx.fillText(label.text, canvas.width * label.position.x, canvas.height * label.position.y);
+	if (label.opacity < 1) {
+		ctx.restore();
 	}
 }
 
@@ -267,12 +408,17 @@ window.requestAnimFrame = (function () {
 		   };
 })();
 
-var hand, canvas, ctx, horizontalCenter, verticalCenter, clickPos, clickedCard, cardWidth, cardHeight, playerCardPosition, opponentCardPosition;
+var hand, canvas, ctx;
 var clickCursor = false,
-	displayCardSlots = false,
 	aspect = 16 / 10,
 	inputs = [],
-	labelFont = "Times New Roman";
+	ERROR_DURATION_SEC = 2.5,
+	LABEL_FONT = "Tahoma",
+	FELT_COLOR = "#35654d",
+	LEDGER_COLOR = "#FDFD96",
+	POKER_RED = "#A62121";
+
+var VERSION = "v0.0.2";
 
 init();
 animate();
