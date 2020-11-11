@@ -396,7 +396,7 @@ function processRound(table) {
 	}
 	// If no players held, auto-advance the round after a few seconds.
 	if (holdingPlayers.length < 2) {
-		setTimeout(doAdvanceRound.bind(null, table), 1000 * table.settings.advanceSec);
+		setTimeout(doAdvanceRound.bind(null, table), 3000 * table.settings.advanceSec);
 	}
 }
 
