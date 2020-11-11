@@ -111,6 +111,7 @@ function createTable() {
 }
 
 function joinTable(socket, code, name) {
+	console.log(`JOIN TABLE ${socket.id} ${code} ${name}`);
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	var player = getPlayerBySocketId(socket.id);
 	// Check for errors
@@ -135,6 +136,7 @@ function joinTable(socket, code, name) {
 	}
 	player.moved = false;
 	player.tableCode = code;
+	console.log(`ADDING PLAYER WITH SESSIONID ${player.sessionId} AND SOCKETID ${player.socket.id}`)
 	table.players.push({
 		sessionId: player.sessionId,
 		socketId: player.socket.id,
@@ -505,6 +507,9 @@ function handleNewConnection(socket, sessionId) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 
 	console.log("NEW CONNECTION");
+	console.log(socket.request.headers.cookie);
+	console.log(cookie.parse(socket.request.headers.cookie));
+	console.log(cookie.parse(socket.request.headers.cookie)["sid"]);
 	var sessionId = DEBUG ? socket.id : cookie.parse(socket.request.headers.cookie)["sid"];
 	console.log("SESSION ID: " + sessionId);
 	var player = getInactiveBySessionId(sessionId);
