@@ -10,7 +10,8 @@ function init() {
 	handleResize();
 
 	initLabels();
-	changeState(MAIN_MENU);
+	initCards();
+	changeState(INIT);
 }
 
 function animate() {
@@ -88,7 +89,7 @@ function handleKeyDown(event) {
 			labels["leave table"].click();
 			break;
 	}
-	console.log("Key press: " + event.keyCode);
+	// console.log("Key press: " + event.keyCode);
 }
 
 function handleKeyUp(event) {
@@ -162,29 +163,41 @@ function handleResize() {
 
 function draw() {
 	drawRect("#eeeeee", 0, 0, 1, 1);
-	drawLabel(labels["version"]);
-	drawLabel(labels["sound"]);
+	labels["version"].draw();
+	labels["sound"].draw();
 	switch (gameState) {
-		case MAIN_MENU:
-			// TODO add "draw" function to label
-			drawLabel(labels["title"]);
-			drawLabel(labels["make table"]);
-			drawLabel(labels["join table"]);
+		case INIT:
 			break;
-		case AT_TABLE:
-		case IN_GAME:
+		case MAIN_MENU:
+			labels["title"].draw();
+			labels["make table"].draw();
+			labels["join table"].draw();
+			break;
+		case TABLE_LOBBY:
 			drawTable();
-			drawLabel(labels["table"]);
-			drawLabel(labels["leave table"]);
-			drawLabel(labels["drop"]);
-			drawLabel(labels["hold"]);
-			drawLabel(labels["pot"]);
-			drawLabel(labels["token goal"]);
-			drawLabel(labels["message"]);
-			drawLabel(labels["deal"]);
+			labels["leave table"].draw();
+			if (theTable.players.length > 1 && !thePlayer.moved) {
+				labels["deal"].draw();
+			}
+			break;
+		case TABLE_GAME:
+			drawTable();
+			if (!thePlayer.moved) {
+				labels["deal"].draw();
+			}
+			break;
+		case TABLE_ROUND:
+			drawTable();
+			labels["drop"].draw();
+			labels["hold"].draw();
+			break;
+		case TABLE_COUNT:
+			drawTable();
+			labels["drop"].draw();
+			labels["hold"].draw();
 			break;
 	}
-	drawLabel(labels["error msg"]);
+	labels["error msg"].draw();
 }
 
 function drawTable() {
@@ -196,7 +209,11 @@ function drawTable() {
 	// Draw center area
 	drawRect("#bbbbbb", 0.05, 0.35, 0.2, 0.3);
 	drawRect("#999999", 0.25, 0.35, 0.5, 0.3);
-	
+	labels["table"].draw();
+	labels["message"].draw();
+	labels["pot"].draw();
+	labels["token goal"].draw();
+
 	// Draw ledger
 	drawLedger();
 
@@ -263,14 +280,14 @@ function drawPlayerPad(player, x, y, width, height) {
 	var absH = canvas.height * height - margin * 2;
 
 	// Draw pads
-	ctx.fillStyle = !theTable.inRound && player.held ? "#f5e076" : "#dddddd";
+	ctx.fillStyle = theTable.state === TABLE_GAME && player.held ? "#f5e076" : "#dddddd";
 	ctx.fillRect(absX, absY, nameW, absH);
 	ctx.fillStyle = FELT_COLOR;
 	ctx.fillRect(absX + nameW, absY, cardW, absH);
 	var labelMargin = 5;
 
 	// Draw name with "ready" light. Adjust size to fit in name box, and then scoot down.
-	var name = new Label({x: absX + labelMargin, y: absY}, player.name, 30, "left");
+	var name = new Label({x: absX + labelMargin, y: absY}, player.inactive ? `<<< ${player.name} >>>` : player.name, 30, "left");
 	scaleLabelsToWidth([name], nameW, labelMargin);
 	var readyMargin = 10 * r;
 	var radius = name.dims().height / 2;	
@@ -278,18 +295,18 @@ function drawPlayerPad(player, x, y, width, height) {
 	scaleLabelsToWidth([name], nameW, labelMargin + readyMargin + radius);
 	name.position.x += labelMargin + readyMargin + radius; 
 	name.position.y += name.dims().height + labelMargin;
-	drawLabel(name, true);
+	name.draw(true);
 
 	// Similarly, make sure tokens and money fit.
-	var money = new Label({x: absX + labelMargin, y: absY + absH - labelMargin}, "$" + player.money, 20, "left");
-	var tokens = new Label({x: absX - labelMargin + nameW, y: absY + absH - labelMargin}, "Tokens: " + player.tokens, 20, "right");
+	var money = new Label({x: absX + labelMargin, y: absY + absH - labelMargin}, `$ ${player.money}`, 20, "left");
+	var tokens = new Label({x: absX - labelMargin + nameW, y: absY + absH - labelMargin}, `Tokens: ${player.tokens}`, 20, "right");
 	scaleLabelsToWidth([money, tokens], nameW, labelMargin);
-	drawLabel(money, true);
-	drawLabel(tokens, true);
+	money.draw(true);
+	tokens.draw(true);
 
 	// Draw the hand.
-	if (theTable.inGame) {
-		hand = hands[player.socketId];
+	if (gameState !== TABLE_LOBBY) {
+		hand = hands[player.sessionId];
 		if (!hand) {
 			hand = makeDownHand(hands[socket.id].length, player.color);
 		}
@@ -297,10 +314,14 @@ function drawPlayerPad(player, x, y, width, height) {
 	}
 }
 
+function drawHands() {
+
+}
+
 function drawLedger() {
 	// Background and title
 	drawRect(LEDGER_COLOR, 0.75, 0.35, 0.2, 0.3);
-	drawLabel(labels["ledger"]);
+	labels["ledger"].draw();
 
 	// Player names.
 	var absX = canvas.width * 0.75;
@@ -313,8 +334,8 @@ function drawLedger() {
 		var nameLabel = new Label({x: absX + margin, y: absY + absRowH * i}, l.name, 15, "left");
 		var valLabel = new Label({x: absX + absW - margin, y: absY + absRowH * i}, "$"+ l.money, 15, "right");
 		scaleLabelsToWidth([nameLabel, valLabel], absW, margin)
-		drawLabel(nameLabel, true);
-		drawLabel(valLabel, true);
+		nameLabel.draw(true);
+		valLabel.draw(true);
 	}
 }
 
@@ -349,62 +370,29 @@ function drawHand(hand, absX, absY, absW, absH) {
 	}
 }
 
+var VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+var SUITS = ["C", "D", "H", "S"];
+var playerColors = ["BLUE", "GREEN", "GREY", "PURPLE", "RED", "YELLOW", "BLU", "GREE", "GRE"];
+var CARDS = [];
+function initCards() {
+	for (var suit of SUITS) {
+		CARDS[suit] = [];
+		for (var value of VALUES) {
+			var img = new Image;
+			img.src = `/images/cards/${value}${suit}.png`;
+			CARDS[suit][value] = img;
+		}
+	}
+	for (var color of playerColors) {
+		CARDS[color] = [];
+		var img = new Image;
+		img.src = `/images/cards/B${color}.png`;
+		CARDS[color]["B"] = img;
+	}
+}
+
 function drawCard(card, x, y, w, h) {
-	var img = new Image;
-	img.src = "/images/cards/" + card.value + card.suit + ".png";
-	ctx.drawImage(img, x, y, w, h);
-}
-
-function drawLabel(label, absolute = false) {
-	if (!label.visible) {
-		return;
-	}
-	if (label.on_src) {
-		return drawImageLabel(label);
-	}
-	if (label.opacity < 1) {
-		ctx.save();
-		ctx.globalAlpha = label.opacity;
-	}
-	if (label.focus || label.clicked) {
-		ctx.strokeStyle = POKER_RED;
-		ctx.fillStyle = POKER_RED;
-	} else if (label.enabled || !label.callback) {
-		ctx.strokeStyle = "black";
-		ctx.fillStyle = "black";
-	} else {
-		ctx.strokeStyle = "grey";
-		ctx.fillStyle = "grey";
-	}
-	ctx.font = (label.size * r) + "px " + label.font;
-
-	// Draw button
-	if (label.callback) {
-		buttonDims = label.buttonDims();
-		ctx.lineWidth = 3 * r;
-		ctx.lineJoin = "round";
-		ctx.strokeRect(buttonDims.left, buttonDims.top, buttonDims.width, buttonDims.height);
-	}
-	ctx.textBaseline = "center";
-	ctx.textAlign = label.align;
-	if (absolute) {
-		ctx.fillText(label.msg(), label.position.x, label.position.y);
-	} else {
-		ctx.fillText(label.msg(), canvas.width * label.position.x, canvas.height * label.position.y);
-	}
-	if (label.opacity < 1) {
-		ctx.restore();
-	}
-}
-
-function drawImageLabel(label) {
-	var img = new Image;
-	img.src = label.src();
-	var x = canvas.width * label.position.x;
-	var y = canvas.height * label.position.y;
-	var w = canvas.width * label.width;
-	var h = canvas.height * label.height;
-	ctx.drawImage(img, x, y, w, h);
+	ctx.drawImage(CARDS[card.suit][card.value], x, y, w, h);
 }
 
 function sound(src) {
