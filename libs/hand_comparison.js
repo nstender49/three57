@@ -9,10 +9,10 @@ module.exports.getWinner = function(players, settings) {
         var result = getBestHand(player.hand, settings);
         var compare = compareResults(result, bestResult);
         if (compare === WIN) {
-            winners = [player.socket.id];
+            winners = [player.sessionId];
             bestResult = result;
         } else if (compare === TIE) {
-            winners.push(player.socket.id);
+            winners.push(player.sessionId);
         }
     }
     return {
