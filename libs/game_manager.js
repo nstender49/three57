@@ -301,11 +301,14 @@ function doAdvanceRound(table) {
 			player.tokens = 0;
 		}
 		// Game holds things we do not want to send to players, e.g. the deck.
-		var game = {
-			tableCode: table.code,
-			round: table.settings.roundMin,
-		};
-		games.push(game);
+		var game = getGameByCode(table.code);
+		if (!game) {
+			game = {};
+			games.push(game);
+		}
+		game.tableCode = table.code,
+		game.round = table.settings.roundMin,
+
 		table.inGame = true;
 		table.inRound = true;
 		table.pot = table.settings.startPot;

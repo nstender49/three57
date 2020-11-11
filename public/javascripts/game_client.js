@@ -393,7 +393,7 @@ function doCountdown(count) {
 		labels["message"].text = labels["message"].text += "Drop!";
 		labels["hold"].hide();
 		labels["drop"].hide();
-		setTimeout(finishCount, 500);
+		setTimeout(finishCount, 100);
 	}
 }
 
