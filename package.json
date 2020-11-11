@@ -5,15 +5,10 @@
   "version": "0.0.1",
   "main": "server.js",
   "scripts": {
-    "start": "redis-server && node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "connect-redis": "^5.0.0",
-    "cookie": "^0.4.1",
-    "cookie-parser": "^1.4.5",
-    "express": "^4.17.1",
-    "express-session": "^1.17.1",
-    "redis": "^3.0.2",
+    "express": "~4.13.1",
     "socket.io": "^1.4.4"
   }
 }

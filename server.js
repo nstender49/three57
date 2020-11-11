@@ -3,8 +3,8 @@
 
 var express = require("express");
 var app = express();
-var server = require("http").Server(app);
-var io = require("./libs/game_manager").listen(server);  // Start Socket.io server and let game_manager handle those connections
+var http = require("http").Server(app);
+var io = require("./libs/game_manager").listen(http);  // Start Socket.io server and let game_manager handle those connections
 
 app.set("port", (process.env.PORT || 3001));  // Use either given port or 3001 as default
 app.use(express.static("public"));  // Staticly serve pages, using directory 'public' as root 
@@ -20,6 +20,6 @@ app.get("*", function(req, res) {
 });
 
 // Start http server
-server.listen(app.get("port"), function() {
+http.listen(app.get("port"), function() {
 	console.log("Node app started on port %s", app.get("port"));
 });
