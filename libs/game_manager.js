@@ -405,6 +405,7 @@ function handleGameEnd(table, tablePlayer) {
 	tablePlayer.money += table.pot - table.settings.startPot;
 	table.inGame = false;
 	table.inRound = false; 
+	table.inCount = false;
 	var message = tablePlayer.name + " wins!";
 	for (var tablePlayer of table.players) {
 		var player = getPlayerBySessionId(tablePlayer.sessionId);
