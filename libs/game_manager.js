@@ -509,8 +509,8 @@ function handleNewConnection(socket, sessionId) {
 	console.log("NEW CONNECTION");
 	console.log(socket.request.headers.cookie);
 	console.log(cookie.parse(socket.request.headers.cookie));
-	console.log(cookie.parse(socket.request.headers.cookie)["sid"]);
-	var sessionId = DEBUG ? socket.id : cookie.parse(socket.request.headers.cookie)["sid"];
+	console.log(cookie.parse(socket.request.headers.cookie)["connect.sid"]);
+	var sessionId = DEBUG ? socket.id : cookie.parse(socket.request.headers.cookie)["connect.sid"];
 	console.log("SESSION ID: " + sessionId);
 	var player = getInactiveBySessionId(sessionId);
 	if (player) {

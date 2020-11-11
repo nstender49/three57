@@ -2,7 +2,10 @@
 // and the Socket.io server, used to handle the the realtime connection to the client.
 
 var express = require("express");
+var session = require("express-session");
 var app = express();
+app.use(session({secret: "cookie secret"}));
+
 var server = require("http").Server(app);
 var io = require("./libs/game_manager").listen(server);  // Start Socket.io server and let game_manager handle those connections
 
