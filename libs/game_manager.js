@@ -1,6 +1,6 @@
 // This file handles all socket.io connections and manages the serverside game logic.
-//var DEBUG = false;
-var DEBUG = true;
+var DEBUG = false;
+// var DEBUG = true;
 
 var socketio = require("socket.io");
 var cookie = require("cookie");
@@ -499,9 +499,10 @@ function isTableOwner(playerId, table) {
 function handleNewConnection(socket, sessionId) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 
-	var sessionId = DEBUG ? socket.id : cookie.parse(socket.request.headers.cookie)["sid"];
+	var sessionId = DEBUG ? socket.id : cookie.parse(socket.request.headers.cookie)["sid"]; 
 	var player = getInactiveBySessionId(sessionId);
 	if (player) {
+		console.log("FOUND INACTIVE PLAYER: " + player); 
 		var index = inactive.indexOf(player);
 		if (index > -1) {
 			inactive.splice(index, 1);
@@ -520,6 +521,7 @@ function handleNewConnection(socket, sessionId) {
 			}
 		}
 	} else {
+		console.log("ADDING NEW PLAYER");
 		players.push({
 			socket: socket,
 			sessionId: sessionId,
@@ -617,8 +619,7 @@ function createTableCode() {
 	var code = "";
 	var charset = "ABCDEFGHIJKLMNOPQRSTUCWXYZ";
 	if (DEBUG) {
-		//var charset = "A";
-		var charset = "ABCDEFGHIJKLMNOPQRSTUCWXYZ";
+		var charset = "A";
 	}
 	do {
 		code = ""

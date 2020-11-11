@@ -9,7 +9,7 @@ var socket = io();
 var gameState = undefined;
 var theTable = undefined;
 var tableReady = false;
-var soundEnabled = true;
+var soundEnabled = false;
 var logFull = true;
 var hands = [];
 var labels = [];
@@ -321,7 +321,7 @@ function initLabels() {
 	labels["message"] = new Label({x: 0.5, y: 0.4}, "", 30);
 	labels["deal"] = new Button({x: 0.2, y: 0.8}, "Deal", 30, startRound, undefined, false);
 
-	labels["sound"] = new ImageButton({x: 0.91, y: 0.97}, 0.02, 0.025, "/images/sound_on.png", enableSound, "/images/sound_off.png", disableSound);
+	labels["sound"] = new ImageButton({x: 0.91, y: 0.97}, 0.02, 0.025, "/images/sound_off.png", disableSound, "/images/sound_on.png", enableSound);
 
 	sounds["count"] = new sound("/sounds/racestart.wav");
 }
