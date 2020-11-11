@@ -527,6 +527,7 @@ function handleNewConnection(socket, sessionId) {
 				var tablePlayer = getTablePlayerBySessionId(sessionId, table);
 				tablePlayer.socketId = socket.id;
 				tablePlayer.inactive = false;
+				console.log("SENDING PLAYER HANDS! with session: " + player.sessionId + " HAND: " + player.hand);
 				// Send player their hand, and hands of other players if in the middle of a game.
 				player.socket.emit("update hand", player.sessionId, player.hand);
 				if (table.state === table.IN_GAME) {
