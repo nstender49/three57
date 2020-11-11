@@ -52,19 +52,61 @@ function handleMouseUp(event) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	for (var l in labels) {
 		if (labels[l].down) {
-			labels[l].down = false;
-			if (labels[l].clicked) {
-				labels[l].uncallback();
-				labels[l].clicked = false;
-			} else {
-				labels[l].callback();
-				if (labels[l].uncallback) {
-					labels[l].clicked = true;
-				}
-			}
+			labels[l].toggle();
 		}
+		labels[l].down = false;
 	}
 	handleMouseMove(event);
+}
+
+var SHIFTED = false;
+function handleKeyDown(event) {
+	switch (event.keyCode) {
+		case 13:	// enter
+			if (SHIFTED) {
+				labels["make table"].click();
+			} else {
+				labels["join table"].click();
+			}
+		case 38:    // up arrow
+			labels["deal"].click();
+			break;
+		case 40:    // down arrow
+			labels["drop"].unclick();
+			labels["hold"].unclick();
+			break;
+		case 39:    // ->
+			labels["drop"].click();
+			break;
+		case 37:	// <-
+			labels["hold"].click();
+			break;
+		case 16:    // shift
+			SHIFTED = true;
+			break;
+		case 27: 	// esc
+			labels["leave table"].click();
+			break;
+	}
+	console.log("Key press: " + event.keyCode);
+}
+
+function handleKeyUp(event) {
+	switch (event.keyCode) {
+		case 16:
+			SHIFTED = false;
+			break;
+	}
+}
+
+function getPlayerNameInput() {
+	var name = document.getElementById("player-name").value;
+	return name ? name : false;
+}
+
+function getGameCodeInput() {
+	var code = document.getElementById("game-code").value;
+	return code ? code : false;
 }
 
 function isOnSlot(event, slot) {
@@ -83,7 +125,7 @@ function isOnButton(event, label) {
 	var x = (event.pageX - canvas.offsetLeft),
 		y = (event.pageY - canvas.offsetTop);
 	if (label.callback && label.enabled) {
-		buttonDims = getButtonDims(label);
+		buttonDims = label.buttonDims();
 		return x >= buttonDims.left && x <= buttonDims.right && y <= buttonDims.bot && y >= buttonDims.top;
 	}
 	return false;
@@ -100,30 +142,19 @@ function handleResize() {
 		canvas.height = window.innerHeight * 0.9;
  		r = canvas.height * aspect / 1000;
 	}
-	ELEM_CONFIGS = [
-		{
-			name: "player-name",
-			x: 0.288,
-			y: 0.63,
-			w: 0.3,
-			h: 0.09,
-		},
-		{
-			name: "game-code",
-			x: 0.594,
-			y: 0.63,
-			w: 0.12,
-			h: 0.09,
-		},
-	];
-	for (var elem of ELEM_CONFIGS) {
-		var nameInput = document.getElementById(elem.name);
-		nameInput.style.position = "absolute";
-		nameInput.style.left = (canvas.getBoundingClientRect().left + canvas.width * elem.x) + "px";
-		nameInput.style.top = (canvas.getBoundingClientRect().top + canvas.height * elem.y) + "px";
-		nameInput.style.width = (canvas.width * elem.w) + "px";
-		nameInput.style.height = (canvas.height * elem.h) + "px";
-		nameInput.style.fontSize = (40 * r) + "px";
+	// Resize input boxes
+	for (var config of ELEM_CONFIGS) {
+		var elem = document.getElementById(config.name);
+		elem.style.position = "absolute";
+		elem.style.left = (canvas.getBoundingClientRect().left + canvas.width * config.x) + "px";
+		elem.style.top = (canvas.getBoundingClientRect().top + canvas.height * config.y) + "px";
+		elem.style.width = (canvas.width * config.w) + "px";
+		elem.style.height = (canvas.height * config.h) + "px";
+		elem.style.fontSize = (40 * r) + "px";
+	}
+	if (DEBUG) {
+		document.getElementById("player-name").value = "P" + Math.floor(Math.random() * 100);
+		document.getElementById("game-code").value = "AAAA";
 	}
 }
 
@@ -132,6 +163,7 @@ function handleResize() {
 function draw() {
 	drawRect("#eeeeee", 0, 0, 1, 1);
 	drawLabel(labels["version"]);
+	drawLabel(labels["sound"]);
 	switch (gameState) {
 		case MAIN_MENU:
 			// TODO add "draw" function to label
@@ -177,7 +209,7 @@ function drawTable() {
 
 	pos = 0;
 	for (var player of theTable.players) {
-		if (player.id === socket.id) {
+		if (player.socketId === socket.id) {
 			var x = 0.05;
 			var y = 0.65;
 			var w = 0.9;
@@ -240,12 +272,12 @@ function drawPlayerPad(player, x, y, width, height) {
 	// Draw name with "ready" light. Adjust size to fit in name box, and then scoot down.
 	var name = new Label({x: absX + labelMargin, y: absY}, player.name, 30, "left");
 	scaleLabelsToWidth([name], nameW, labelMargin);
-	var readyMargin = 10;
-	var radius = getTextSize(name).height / 2;	
+	var readyMargin = 10 * r;
+	var radius = name.dims().height / 2;	
 	drawCircle(player.moved ? "green" : "red", absX + radius + labelMargin, absY + radius + labelMargin, radius);
 	scaleLabelsToWidth([name], nameW, labelMargin + readyMargin + radius);
 	name.position.x += labelMargin + readyMargin + radius; 
-	name.position.y += getTextSize(name).height + labelMargin;
+	name.position.y += name.dims().height + labelMargin;
 	drawLabel(name, true);
 
 	// Similarly, make sure tokens and money fit.
@@ -257,7 +289,7 @@ function drawPlayerPad(player, x, y, width, height) {
 
 	// Draw the hand.
 	if (theTable.inGame) {
-		hand = hands[player.id];
+		hand = hands[player.socketId];
 		if (!hand) {
 			hand = makeDownHand(hands[socket.id].length, player.color);
 		}
@@ -290,7 +322,7 @@ function scaleLabelsToWidth(labels, width, margin) {
 	var totalMargin = margin * (2 + labels.length - 1);
 	var totalWidth = totalMargin;
 	for (var label of labels) {
-		totalWidth += getTextSize(label).width;
+		totalWidth += label.dims().width;
 	}
 	if (totalWidth > width) {
 		var scale = (width - totalMargin) / totalWidth;
@@ -323,43 +355,12 @@ function drawCard(card, x, y, w, h) {
 	ctx.drawImage(img, x, y, w, h);
 }
 
-function getTextSize(label) {
-	ctx.font = (label.size * r) + "px " + label.font;
-	var metrics = ctx.measureText(label.msg())
-	return {
-		width: metrics.width,
-		height: metrics.actualBoundingBoxAscent,
-	}
-}
-
-function getButtonDims(label) {
-	var textSize = getTextSize(label);
-	var margin = 20 * r;
-
-	// Top left corner.
-	var minX = canvas.width * label.position.x - margin * 0.5;
-	if (label.align === "center") {
-		minX -= textSize.width / 2;
-	} else if (label.align === "right") {
-		minX -= textSize.width;
-	}
-	var minY = canvas.height * label.position.y - textSize.height - margin * 0.5;
-	var maxX = minX + textSize.width + margin;
-	var maxY = minY + textSize.height + margin;
-	
-	return {
-		left: minX,
-		right: maxX,
-		top: minY,
-		bot: maxY,
-		width: textSize.width + margin,
-		height: textSize.height + margin,
-	}
-}
-
 function drawLabel(label, absolute = false) {
 	if (!label.visible) {
 		return;
+	}
+	if (label.on_src) {
+		return drawImageLabel(label);
 	}
 	if (label.opacity < 1) {
 		ctx.save();
@@ -379,7 +380,7 @@ function drawLabel(label, absolute = false) {
 
 	// Draw button
 	if (label.callback) {
-		buttonDims = getButtonDims(label);
+		buttonDims = label.buttonDims();
 		ctx.lineWidth = 3 * r;
 		ctx.lineJoin = "round";
 		ctx.strokeRect(buttonDims.left, buttonDims.top, buttonDims.width, buttonDims.height);
@@ -393,6 +394,33 @@ function drawLabel(label, absolute = false) {
 	}
 	if (label.opacity < 1) {
 		ctx.restore();
+	}
+}
+
+function drawImageLabel(label) {
+	var img = new Image;
+	img.src = label.src();
+	var x = canvas.width * label.position.x;
+	var y = canvas.height * label.position.y;
+	var w = canvas.width * label.width;
+	var h = canvas.height * label.height;
+	ctx.drawImage(img, x, y, w, h);
+}
+
+function sound(src) {
+	this.sound = document.createElement("audio");
+	this.sound.src = src;
+	this.sound.setAttribute("preload", "auto");
+	this.sound.setAttribute("controls", "none");
+	this.sound.style.display = "none";
+	document.body.appendChild(this.sound);
+	this.play = function(){
+		if (soundEnabled) {
+			this.sound.play();
+		}
+	}
+	this.stop = function(){
+		this.sound.pause();
 	}
 }
 
@@ -411,7 +439,6 @@ window.requestAnimFrame = (function () {
 var hand, canvas, ctx;
 var clickCursor = false,
 	aspect = 16 / 10,
-	inputs = [],
 	ERROR_DURATION_SEC = 2.5,
 	LABEL_FONT = "Tahoma",
 	FELT_COLOR = "#35654d",
@@ -419,6 +446,25 @@ var clickCursor = false,
 	POKER_RED = "#A62121";
 
 var VERSION = "v0.0.2";
+var ELEM_CONFIGS = [
+	{
+		name: "player-name",
+		x: 0.288,
+		y: 0.63,
+		w: 0.3,
+		h: 0.09,
+	},
+	{
+		name: "game-code",
+		x: 0.594,
+		y: 0.63,
+		w: 0.12,
+		h: 0.09,
+	},
+];
+
+//var DEBUG = true;
+var DEBUG = false;
 
 init();
 animate();
@@ -427,3 +473,5 @@ window.addEventListener("resize", handleResize, false);
 canvas.addEventListener("mousemove", handleMouseMove, false);
 canvas.addEventListener("mousedown", handleMouseDown, false);
 canvas.addEventListener("mouseup", handleMouseUp, false);
+window.addEventListener("keydown", handleKeyDown, false);
+window.addEventListener("keyup", handleKeyUp, false);

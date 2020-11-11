@@ -9,9 +9,11 @@ var socket = io();
 var gameState = undefined;
 var theTable = undefined;
 var tableReady = false;
+var soundEnabled = true;
 var logFull = true;
 var hands = [];
 var labels = [];
+var sounds = [];
 var thePlayer;
 
 //////////  Socket Events  \\\\\\\\\\
@@ -34,6 +36,9 @@ socket.on("game over", function(message) {
 	handleGameOver(message);
 });
 
+socket.on("start count", function() {
+	startCount();
+});
 
 socket.on("new round", function(hand) {
 	handleNewRound(hand);
@@ -68,6 +73,45 @@ class Label {
 	msg() {
 		return this.text + this.data;
 	}
+
+	disable() {
+		this.enabled = false;
+		this.clicked = false;
+	}
+
+	dims() {
+		ctx.font = (this.size * r) + "px " + this.font;
+		var metrics = ctx.measureText(this.msg())
+		return {
+			width: metrics.width,
+			height: metrics.actualBoundingBoxAscent,
+		}
+	}
+
+	buttonDims() {
+		var dims = this.dims();
+		var margin = 20 * r;
+	
+		// Top left corner.
+		var minX = canvas.width * this.position.x - margin * 0.5;
+		if (this.align === "center") {
+			minX -= dims.width / 2;
+		} else if (this.align === "right") {
+			minX -= dims.width;
+		}
+		var minY = canvas.height * this.position.y - dims.height - margin * 0.5;
+		var maxX = minX + dims.width + margin;
+		var maxY = minY + dims.height + margin;
+		
+		return {
+			left: minX,
+			right: maxX,
+			top: minY,
+			bot: maxY,
+			width: dims.width + margin,
+			height: dims.height + margin,
+		}
+	}
 }
 
 class Button {
@@ -87,10 +131,136 @@ class Button {
 		this.opacity = 1;
 	}
 
+	toggle() {
+		if (!this.enabled) {
+			return;
+		}
+		if (this.clicked && this.undoEnabled) {
+			this.clicked = false;
+			this.uncallback();
+		} else {
+			if (this.uncallback) {
+				this.clicked = true;
+			}
+			this.callback();
+		}
+	}
+
+	click() {
+		if (!this.enabled) {
+			return;
+		}
+		if (!this.clicked) {
+			if (this.uncallback) {
+				this.clicked = true;
+			}
+			this.callback();
+		}
+	}
+
+	unclick() {
+		if (!this.enabled) {
+			return;
+		}
+		if (this.clicked) {
+			this.clicked = false;
+			this.uncallback();
+		}
+	}
+
 	enable() {
 		this.visible = true;
 		this.enabled = true;
 		this.clicked = false;
+		this.undoEnabled = true;
+	}
+
+	hide() {
+		this.visible = false;
+		this.enabled = false;
+		this.clicked = false;
+	}
+
+	disable() {
+		this.hide();
+	}
+
+	disableUndo() {
+		this.undoEnabled = false;
+	}
+
+	msg() {
+		return this.text;
+	}
+
+	dims() {
+		ctx.font = (this.size * r) + "px " + this.font;
+		var metrics = ctx.measureText(this.msg())
+		return {
+			width: metrics.width,
+			height: metrics.actualBoundingBoxAscent,
+		}
+	}
+
+	buttonDims() {
+		var dims = this.dims();
+		var margin = 20 * r;
+	
+		// Top left corner.
+		var minX = canvas.width * this.position.x - margin * 0.5;
+		if (this.align === "center") {
+			minX -= dims.width / 2;
+		} else if (this.align === "right") {
+			minX -= dims.width;
+		}
+		var minY = canvas.height * this.position.y - dims.height - margin * 0.5;
+		var maxX = minX + dims.width + margin;
+		var maxY = minY + dims.height + margin;
+		
+		return {
+			left: minX,
+			right: maxX,
+			top: minY,
+			bot: maxY,
+			width: dims.width + margin,
+			height: dims.height + margin,
+		}
+	}
+}
+
+class ImageButton {
+	constructor(position, width, height, on_src, callback, off_src, uncallback) {
+		this.position = position;
+		this.width = width;
+		this.height = height;
+		this.on_src = on_src;
+		this.off_src = off_src;
+		this.callback = callback;
+		this.uncallback = uncallback;
+		this.enabled = true;
+		this.visible = true;
+		this.on = true;
+	}
+
+	src() {
+		return this.on ? this.on_src : this.off_src;
+	}
+
+	toggle() {
+		if (!this.enabled) {
+			return;
+		}
+		if (this.on) {
+			this.uncallback();
+		} else {
+			this.callback();
+		}
+		this.on = !this.on;
+	}
+
+	enable() {
+		this.visible = true;
+		this.enabled = true;
 	}
 
 	hide() {
@@ -98,8 +268,33 @@ class Button {
 		this.enabled = false;
 	}
 
-	msg() {
-		return this.text;
+	disable() {
+		this.hide();
+	}
+
+	dims() {
+		return {
+			width: canvas.width * this.width,
+			height: canvas.height * this.height,
+		}
+	}
+
+	buttonDims() {
+		var dims = this.dims();
+
+		var minX = canvas.width * this.position.x;
+		var minY = canvas.height * this.position.y;
+		var maxX = minX + dims.width;
+		var maxY = minY + dims.height;
+		
+		return {
+			left: minX,
+			right: maxX,
+			top: minY,
+			bot: maxY,
+			width: dims.width,
+			height: dims.height,
+		}
 	}
 }
 
@@ -125,6 +320,10 @@ function initLabels() {
 	labels["token goal"] = new Label({x: 0.06, y: 0.45}, "Token Goal: ", 20, "left");
 	labels["message"] = new Label({x: 0.5, y: 0.4}, "", 30);
 	labels["deal"] = new Button({x: 0.2, y: 0.8}, "Deal", 30, startRound, undefined, false);
+
+	labels["sound"] = new ImageButton({x: 0.91, y: 0.97}, 0.02, 0.025, "/images/sound_on.png", enableSound, "/images/sound_off.png", disableSound);
+
+	sounds["count"] = new sound("/sounds/racestart.wav");
 }
 
 function changeState(state) {
@@ -133,9 +332,9 @@ function changeState(state) {
 		return;
 	}
 	for (var l in labels) { 
-		labels[l].enabled = false;
-		labels[l].clicked = false;
+		labels[l].disable();
 	}
+	labels["sound"].enable();
 	switch(state) {
 		case MAIN_MENU:
 			theTable = undefined;
@@ -144,14 +343,14 @@ function changeState(state) {
 				held: false,
 			};
 			tableReady = false;
-			labels["make table"].enabled = true;
-			labels["join table"].enabled = true;
+			labels["make table"].enable();
+			labels["join table"].enable();
 			labels["message"].text = "Waiting for players to join...";
 			toggleInputs(true);
 			break;
 		case AT_TABLE:
 			labels["table"].text = "Table " + theTable.code;
-			labels["leave table"].enabled = true;
+			labels["leave table"].enable();
 			toggleInputs(false);
 			break;
 	}
@@ -165,7 +364,43 @@ function toggleInputs(on) {
 	}
 }
 
+function enableSound() {
+	soundEnabled = true;
+}
+
+function disableSound() {
+	for (var sound of sounds) {
+		sound.stop();
+	}
+	soundEnabled = false;
+}
+
 ///// Game logic \\\\\
+
+function startCount() {
+	labels["hold"].disableUndo();
+	labels["drop"].disableUndo();
+	labels["message"].text = "3...";
+	sounds["count"].play();
+	setTimeout(doCountdown.bind(null, 2), 1000);
+}
+
+function doCountdown(count) {
+	if (count > 0) {
+		labels["message"].text = labels["message"].text += count + "...";
+		setTimeout(doCountdown.bind(null, count - 1), 1000);
+	} else {
+		labels["message"].text = labels["message"].text += "Drop!";
+		labels["hold"].hide();
+		labels["drop"].hide();
+		setTimeout(finishCount, 500);
+	}
+}
+
+function finishCount() {
+	labels["hold"].enable();
+	labels["drop"].enable();
+}
 
 function handleRoundOver(message) {
 	labels["hold"].hide();
@@ -177,7 +412,7 @@ function handleRoundOver(message) {
 }
 
 function handleNewRound(hand) {
-	labels["message"].text = "1, 2, 3, Drop!";
+	labels["message"].text = "Choose to Hold or Drop";
 	labels["hold"].enable();
 	labels["drop"].enable();
 	hands = [];
@@ -234,7 +469,7 @@ function updateHand(playerId, hand) {
 
 function makeTable() {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	var name = document.getElementById("player-name").value;
+	var name = getPlayerNameInput()
 	// TODO: make settings and send them here.
 	if (name) {
 		socket.emit("make table", name);
@@ -245,8 +480,8 @@ function makeTable() {
 
 function joinTable() {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	var name = document.getElementById("player-name").value;
-	var code = document.getElementById("game-code").value.toUpperCase();
+	var name = getPlayerNameInput();
+	var code = getGameCodeInput();
 	if (name && code) {
 		socket.emit("join table", code, name);
 	} else {
@@ -259,11 +494,7 @@ function updateTable(table) {
 	if (table) {
 		theTable = table;
 		changeState(AT_TABLE);
-		console.log(theTable);
-		console.log(theTable.ledger);
-		console.log(theTable.theLedger);
 		labels["pot"].data = table.pot;
-		// Figure out how to add functions, make this a "data field"
 		labels["token goal"].data = table.settings.tokenGoal;
 		if (table.inGame) {
 			labels["leave table"].hide();
@@ -271,7 +502,7 @@ function updateTable(table) {
 			labels["leave table"].enable();
 		}
 		for (var player of theTable.players) {
-			if (player.id === socket.id) {
+			if (player.socketId === socket.id) {
 				thePlayer = player;
 				break;
 			}
