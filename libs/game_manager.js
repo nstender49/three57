@@ -526,6 +526,12 @@ function handleNewConnection(socket, sessionId) {
 				console.log("PLAYER'S TABLE (" + player.tableCode + ") EXISTS! " + sessionId);
 				var tablePlayer = getTablePlayerBySessionId(sessionId, table);
 				tablePlayer.socketId = socket.id;
+				tablePlayer.inactive = false;
+				// Send player their hand, and hands of other players if in the middle of a game.
+				player.socket.emit("update hand", player.sessionId, player.hand);
+				if (table.state === table.IN_GAME) {
+					getHoldingPlayers(table);
+				}
 				updateTable(table);
 			} else {
 				console.log("PLAYER'S TABLE DOES NOT EXIST, REMOVING");
