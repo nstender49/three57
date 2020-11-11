@@ -14,7 +14,7 @@ var games = [];
 
 var values = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 var suits = ["C", "D", "H", "S"];
-var playerColors = ["BLUE", "GREEN", "GREY", "PURPLE", "RED", "YELLOW"];
+var playerColors = ["BLUE", "GREEN", "GREY", "PURPLE", "RED", "YELLOW", "BLU", "GREE", "GRE"];
 
 var logFull = true;
 
