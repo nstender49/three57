@@ -453,7 +453,7 @@ function dealRound(table, game) {
 			player.hand = [];
 		}
 		deal(player.hand, game.deck, game.round);
-		console.log("SENDING PLAYER HANDS! with session: " + player.sessionId + " HAND: " + player.hand);
+		console.log("SENDING DEALT HAND! with session: " + player.sessionId + " HAND: " + player.hand);
 		player.socket.emit("update hand", player.sessionId, player.hand, true);
 	}
 }
