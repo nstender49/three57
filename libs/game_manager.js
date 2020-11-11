@@ -234,10 +234,15 @@ function updateMoved(socket, moved, player) {
 }
 
 function updateTable(table) {
+	console.log("UPDATING TABLE: " + table.code);
 	for (var tablePlayer of table.players) {
+		console.log("UPDATING TABLE PLAYER: " + tablePlayer.name + " FOR TABLE: " + table.code);
 		var player = getPlayerBySessionId(tablePlayer.sessionId);
 		if (player) {
+			console.log("FOUND AN ACTIVE PLAYER TO UPDATE FOR " + tablePlayer.name + " (" + tablePlayer.sessionId + ") AT TABLE " + table.code);
 			player.socket.emit("update table", table);
+		} else {
+			console.log("DID NOT FIND AN ACTIVE PLAYER FOR PLAYER " + tablePlayer.name + " (" + tablePlayer.sessionId + ") AT TABLE " + table.code);
 		}
 	}
 	if (table.players.length === 0) {
@@ -499,10 +504,12 @@ function isTableOwner(playerId, table) {
 function handleNewConnection(socket, sessionId) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 
-	var sessionId = DEBUG ? socket.id : cookie.parse(socket.request.headers.cookie)["sid"]; 
+	console.log("NEW CONNECTION");
+	var sessionId = DEBUG ? socket.id : cookie.parse(socket.request.headers.cookie)["sid"];
+	console.log("SESSION ID: " + sessionId);
 	var player = getInactiveBySessionId(sessionId);
 	if (player) {
-		console.log("FOUND INACTIVE PLAYER: " + player); 
+		console.log("FOUND INACTIVE PLAYER! " + sessionId); 
 		var index = inactive.indexOf(player);
 		if (index > -1) {
 			inactive.splice(index, 1);
@@ -511,17 +518,20 @@ function handleNewConnection(socket, sessionId) {
 		player.socket = socket;
 		players.push(player);
 		if (player.tableCode) {
+			console.log("PLAYER HAS A TABLE CODE! " + sessionId);
 			var table = getTableByCode(player.tableCode);
 			if (table) {
+				console.log("PLAYER'S TABLE (" + player.tableCode + ") EXISTS! " + sessionId);
 				var tablePlayer = getTablePlayerBySessionId(sessionId, table);
 				tablePlayer.socketId = socket.id;
 				updateTable(table);
 			} else {
+				console.log("PLAYER'S TABLE DOES NOT EXIST, REMOVING");
 				player.tableCode = undefined;
 			}
 		}
 	} else {
-		console.log("ADDING NEW PLAYER");
+		console.log("ADDING NEW PLAYER FOR " + sessionId);
 		players.push({
 			socket: socket,
 			sessionId: sessionId,
