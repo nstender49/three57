@@ -453,6 +453,7 @@ function dealRound(table, game) {
 			player.hand = [];
 		}
 		deal(player.hand, game.deck, game.round);
+		console.log("SENDING PLAYER HANDS! with session: " + player.sessionId + " HAND: " + player.hand);
 		player.socket.emit("update hand", player.sessionId, player.hand, true);
 	}
 }
@@ -529,7 +530,7 @@ function handleNewConnection(socket, sessionId) {
 				tablePlayer.inactive = false;
 				console.log("SENDING PLAYER HANDS! with session: " + player.sessionId + " HAND: " + player.hand);
 				// Send player their hand, and hands of other players if in the middle of a game.
-				player.socket.emit("update hand", player.sessionId, player.hand);
+				player.socket.emit("update hand", player.sessionId, player.hand, true);
 				if (table.state === table.IN_GAME) {
 					getHoldingPlayers(table);
 				}
