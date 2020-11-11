@@ -613,7 +613,8 @@ function createTableCode() {
 	var code = "";
 	var charset = "ABCDEFGHIJKLMNOPQRSTUCWXYZ";
 	if (DEBUG) {
-		var charset = "A";
+		//var charset = "A";
+		var charset = "ABCDEFGHIJKLMNOPQRSTUCWXYZ";
 	}
 	do {
 		code = ""
