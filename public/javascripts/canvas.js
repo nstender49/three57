@@ -308,7 +308,7 @@ function drawPlayerPad(player, x, y, width, height) {
 	if (gameState !== TABLE_LOBBY) {
 		hand = hands[player.sessionId];
 		if (!hand) {
-			hand = makeDownHand(hands[socket.id].length, player.color);
+			hand = makeDownHand(table.round, player.color);
 		}
 		drawHand(hand, absX + nameW, absY, cardW, absH);
 	}
