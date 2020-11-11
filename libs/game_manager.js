@@ -1,6 +1,6 @@
 // This file handles all socket.io connections and manages the serverside game logic.
-var DEBUG = false;
-// var DEBUG = true;
+//var DEBUG = false;
+var DEBUG = true;
 
 var socketio = require("socket.io");
 var cookie = require("cookie");
@@ -495,7 +495,7 @@ function isTableOwner(playerId, table) {
 function handleNewConnection(socket, sessionId) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 
-	var sessionId = cookie.parse(socket.request.headers.cookie)["sid"];
+	var sessionId = DEBUG ? socket.id : cookie.parse(socket.request.headers.cookie)["sid"];
 	var player = getInactiveBySessionId(sessionId);
 	if (player) {
 		var index = inactive.indexOf(player);

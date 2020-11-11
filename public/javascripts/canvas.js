@@ -463,8 +463,8 @@ var ELEM_CONFIGS = [
 	},
 ];
 
-//var DEBUG = true;
-var DEBUG = false;
+var DEBUG = true;
+//var DEBUG = false;
 
 init();
 animate();
