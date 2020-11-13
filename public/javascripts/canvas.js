@@ -236,7 +236,9 @@ function drawTable() {
 			var y = 0.65;
 			var w = 0.9;
 			var h = 0.3;
-			labels["hand message"].text = hands[player.sessionId].text;
+			if (hands[player.sessionId]) {
+				labels["hand message"].text = hands[player.sessionId].text;
+			}
 		} else {
 			var rowIdx = Math.floor(pos / cols);
 			var colIdx = pos % cols;
