@@ -14,7 +14,7 @@ var games = [];
 
 var values = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 var suits = ["C", "D", "H", "S"];
-var playerColors = ["BLUE", "GREEN", "GREY", "PURPLE", "RED", "YELLOW", "BLU", "GREE", "GRE"];
+var playerColors = ["BLACK", "BLUE", "GREEN", "ORANGE", "PURPLE", "RED", "VIOLET", "WHITE", "YELLOW"];
 
 // Delete tables with all inactive players after 1 hour
 var INACTIVE_TABLE_DELETION_SEC = DEBUG ? 1 : 1 * 60 * 60;
@@ -227,7 +227,10 @@ function processMove(socket, moved, held) {
 	var tablePlayer = getTablePlayerBySessionId(player.sessionId, table);
 	if (table.state !== TABLE_COUNT) {
 		tablePlayer.moved = moved;
-		advanceRound(table);
+		var error = advanceRound(table);
+		if (error) {
+			socket.emit("server error", error);
+		}
 	}
 }
 
@@ -266,7 +269,8 @@ function advanceRound(table) {
 		// Start game.
 		case TABLE_LOBBY:
 			clearMoves(table);
-			handleNewGame(table);
+			var valid = handleNewGame(table);
+			if (!valid) { return; }
 			handleNewRound(table);
 			table.state = TABLE_ROUND;
 			break;
@@ -298,8 +302,8 @@ function advanceRound(table) {
 
 function handleNewGame(table) {
 	if (table.players.length < 2) {
-		// TODO send error message to player?
-		return;
+		emitErrorToTable(table, "Cannot being game with less than 2 players!");
+		return false;
 	}
 	for (var tablePlayer of table.players) {
 		tablePlayer.tokens = 0;
@@ -315,6 +319,14 @@ function handleNewGame(table) {
 	table.round = table.settings.roundMax;
 	table.pot = table.settings.startPot;
 	table.message = "Press Deal to Start!";
+	return true;
+}
+
+function emitErrorToTable(table, error) {
+	for (var tablePlayer of table.players) {
+		var player = getPlayerBySessionId(tablePlayer.sessionId);
+		player.socket.emit("server error", error);
+	}
 }
 
 function handleNewRound(table) {
@@ -374,7 +386,8 @@ function processRound(table) {
 }
 
 function getHoldingPlayers(table) {
-	var holdingPlayers = []
+	var holdingPlayers = [];
+	var holdingNames = [];
 	for (var tablePlayer of table.players) {
 		var player = getPlayerBySessionId(tablePlayer.sessionId);
 		if (!player) {
@@ -382,14 +395,15 @@ function getHoldingPlayers(table) {
 		}
 		if (player.held) {
 			holdingPlayers.push(player);
+			holdingNames.push(tablePlayer.name);
 		}
 		// Mark table player as holding or not, to signal to clients.
 		tablePlayer.held = player.held;
 	}
 	// Show players who held each others' hands 
-	for (var holder1 of holdingPlayers) {
-		for (var holder2 of holdingPlayers) {
-			holder1.socket.emit("update hand", holder2.sessionId, holder2.hand);
+	for (var holder of holdingPlayers) {
+		for (var i = 0; i < holdingPlayers.length; i++) {
+			holder.socket.emit("update hand", holdingNames[i], holdingPlayers[i].hand);
 		}
 	}
 	return holdingPlayers;
@@ -451,7 +465,7 @@ function generateDeck() {
 	return Array.from(new Array(52), (x, i) => i);
 }
 
-function dealRound(table, game) {
+function dealRound(table, game) { 
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	if (table.round === table.settings.roundMin) {
 		game.deck = generateDeck();
@@ -465,7 +479,7 @@ function dealRound(table, game) {
 		}
 		deal(player.hand, game.deck, table);
 		console.log("SENDING DEALT HAND! with session: " + player.sessionId + " HAND: " + player.hand);
-		player.socket.emit("update hand", player.sessionId, player.hand, true);
+		player.socket.emit("update hand", tablePlayer.name, player.hand, true);
 	}
 }
 
@@ -543,7 +557,7 @@ function handleNewConnection(socket, sessionId) {
 				tablePlayer.active = true;
 				console.log("SENDING PLAYER HANDS! with session: " + player.sessionId + " HAND: " + player.hand);
 				// Send player their hand, and hands of other players if in the middle of a game.
-				player.socket.emit("update hand", player.sessionId, player.hand, true);
+				player.socket.emit("update hand", tablePlayer.name, player.hand, true);
 				if (table.state === table.IN_GAME) {
 					getHoldingPlayers(table);
 				}
@@ -597,6 +611,7 @@ function playerDisconnected(socket) {
 	inactive.push(player);
 }
 
+{
 function getPlayerBySocketId(socketId) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	for (var i = 0; i < players.length; i++) {
@@ -665,7 +680,7 @@ function createTableCode() {
 	var code = "";
 	var charset = "ABCDEFGHIJKLMNOPQRSTUCWXYZ";
 	if (DEBUG) {
-		var charset = "A";
+		var charset = String.fromCharCode('A'.charCodeAt() + tables.length);
 	}
 	do {
 		code = ""
@@ -674,4 +689,5 @@ function createTableCode() {
 		}
 	} while (getTableByCode(code));
 	return code;
+}
 }

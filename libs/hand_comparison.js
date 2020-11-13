@@ -8,7 +8,7 @@ module.exports.getWinner = function(players) {
     var winners = [];
     var best = undefined;
     for (var player of players) {
-        var compare = compareResults(player.hand.cards, best);
+        var compare = compareResults(player.hand.hand, best);
         if (compare === WIN) {
             winners = [player.sessionId];
             best = player.hand.hand;
@@ -27,7 +27,8 @@ function compareResults(hand, best) {
     if (HAND_RANKINGS[hand.rank] != HAND_RANKINGS[best.rank]) {
         return HAND_RANKINGS[hand.rank] < HAND_RANKINGS[best.rank] ? WIN : LOSE;
     }
-    return compareValues(hand, best);
+    console.log("COMPARING HANDS " + hand + " " + best + " " + compareValues(hand, best));
+    return compareValues(hand.values, best.values);
 }
 
 function compareValues(vals1, vals2) {
@@ -62,7 +63,7 @@ module.exports.handToString = function(hand) {
         case THREE_OF_A_KIND:
             var s = "3-of-a-Kind " + hand.values[0] + "s";
             if (hand.values.length > 1) {
-                s += "- Kickers: " + hand.values.slice(1).join("-");
+                s += " - Kickers: " + hand.values.slice(1).join("-");
             }
             return s;
         case TWO_PAIR:

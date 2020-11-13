@@ -126,7 +126,7 @@ function isOnSlot(event, slot) {
 function isOnButton(event, label) {
 	var x = (event.pageX - canvas.offsetLeft),
 		y = (event.pageY - canvas.offsetTop);
-	if (label.callback && label.enabled) {
+	if (label.enabled) {
 		buttonDims = label.buttonDims();
 		return x >= buttonDims.left && x <= buttonDims.right && y <= buttonDims.bot && y >= buttonDims.top;
 	}
@@ -180,7 +180,11 @@ function draw() {
 			drawTable();
 			labels["leave table"].draw();
 			if (theTable.players.length > 1 && !thePlayer.moved) {
+				labels["deal"].enable();
 				labels["deal"].draw();
+				if (labels["auto box"].clicked) {
+					labels["deal"].toggle();
+				}
 			}
 			break;
 		case TABLE_GAME:
@@ -193,13 +197,12 @@ function draw() {
 			drawTable();
 			labels["drop"].draw();
 			labels["hold"].draw();
-			labels["hand message"].draw();
+
 			break;
 		case TABLE_COUNT:
 			drawTable();
 			labels["drop"].draw();
 			labels["hold"].draw();
-			labels["hand message"].draw();
 			break;
 	}
 	labels["error msg"].draw();
@@ -210,14 +213,34 @@ function drawTable() {
 	if (!theTable) {
 		return;
 	}
-
-	// Draw center area
-	drawRect("#bbbbbb", 0.05, 0.35, 0.2, 0.3);
-	drawRect("#999999", 0.25, 0.35, 0.5, 0.3);
 	labels["table"].draw();
-	labels["message"].draw();
+
+	// Draw settings
+	drawRect("#bbbbbb", 0.05, 0.35, 0.2, 0.3);
 	labels["pot"].draw();
 	labels["token goal"].draw();
+6
+	// Draw Message area
+	drawRect("#999999", 0.25, 0.35, 0.5, 0.3);
+	labels["message"].draw();
+	if (gameState !== TABLE_LOBBY) {
+		labels["hand message"].draw();
+	}
+	if (gameState === TABLE_GAME && thePlayer && thePlayer.held) {
+		var numRow = Math.max(4, Object.keys(hands).length - 1);
+		console.log("WRITING HANDS");
+		console.log(numRow);
+		var i = 0;
+		for (var name in hands) {
+			if (name === thePlayer.name) {
+				continue;
+			}
+			handMessage = new Label({x: 0.27, y: 0.45 + 0.2 * i / numRow}, `${name}: ${hands[name].text}`, 80 / numRow, "left");
+			console.log(0.45 + 0.2 * i / numRow);
+			handMessage.draw();
+			i++;
+		}
+	}
 
 	// Draw ledger
 	drawLedger();
@@ -236,8 +259,8 @@ function drawTable() {
 			var y = 0.65;
 			var w = 0.9;
 			var h = 0.3;
-			if (hands[player.sessionId]) {
-				labels["hand message"].text = hands[player.sessionId].text;
+			if (hands[player.name]) {
+				labels["hand message"].text = hands[player.name].text;
 			}
 		} else {
 			var rowIdx = Math.floor(pos / cols);
@@ -250,6 +273,9 @@ function drawTable() {
 		}
 		drawPlayerPad(player,x, y, w, h);
 	}
+
+	labels["auto"].draw();
+	labels["auto box"].draw();
 }
 
 function drawRect(color, x, y, w, h) {
@@ -314,7 +340,7 @@ function drawPlayerPad(player, x, y, width, height) {
 
 	// Draw the hand.
 	if (gameState !== TABLE_LOBBY) {
-		drawHand(absX + nameW, absY, cardW, absH, hands[player.sessionId], theTable.round);
+		drawHand(absX + nameW, absY, cardW, absH, hands[player.name], theTable.round);
 	}
 }
 
@@ -374,9 +400,6 @@ var VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 var SUITS = ["C", "D", "H", "S"];
 var CARD_BACK = undefined;
 var CARDS = [];
-// var CARD_SETS = ["bicycle1"];
-var CARD_RATIO = 1.4;
-
 
 function initCards() {
 	for (var suit of SUITS) {

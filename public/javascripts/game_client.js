@@ -21,6 +21,7 @@ var sounds = [];
 
 var thePlayer;
 var hands = [];
+var holders = [];
 
 //////////  Socket Events  \\\\\\\\\\
 
@@ -30,11 +31,11 @@ socket.on("update table", function(table) {
 	updateTable(table);
 });
 
-socket.on("update hand", function(id, hand, clear) {
+socket.on("update hand", function(name, hand, clear) {
 	if (clear) {
 		hands = [];
 	}
-	hands[id] = hand;
+	hands[name] = hand;
 });
 
 socket.on("play countdown", function() {
@@ -131,9 +132,7 @@ class Button {
 		if (!this.enabled) {
 			return;
 		}
-		console.log("TOGGLE!!!");
 		if (this.clicked) {
-			console.log("TRYING TO UNCLICK");
 			this.unclick();
 		} else {
 			this.click();
@@ -167,13 +166,13 @@ class Button {
 	enable() {
 		this.visible = true;
 		this.enabled = true;
-		this.clicked = false;
-		this.undoEnabled = true;
 	}
 
 	disable() {
 		this.visible = false;
 		this.enabled = false;
+		this.clicked = false;
+		this.undoEnabled = true;
 	}
 
 	disableUndo() {
@@ -367,13 +366,90 @@ class ImageButton {
 	}
 }
 
+class Checkbox {
+	constructor(position, size, callback) {
+		this.position = position;
+		this.size = size;
+		this.callback = callback;
+		this.down = false;
+		this.enabled = false;
+		this.visible = true;
+		this.clicked = false;
+	}
+
+	toggle() {
+		if (!this.enabled) {
+			return;
+		}
+		this.clicked = !this.clicked;
+	}
+
+	enable() {
+		this.visible = true;
+		this.enabled = true;
+	}
+
+	disable() {
+		this.visible = false;
+		this.enabled = false;
+	}
+
+	dims() {
+		return {
+			width: canvas.width * this.size,
+			height: canvas.width * this.size,
+		}
+	}
+
+	buttonDims() {
+		var dims = this.dims();
+	
+		// Top left corner.
+		var minX = canvas.width * this.position.x - dims.width * 0.5;
+		var minY = canvas.height * this.position.y - dims.height * 0.5;
+		var maxX = minX + dims.width;
+		var maxY = minY + dims.height;
+		
+		return {
+			left: minX,
+			right: maxX,
+			top: minY,
+			bot: maxY,
+			width: dims.width,
+			height: dims.height,
+		}
+	}
+
+	draw() {
+		if (!this.visible) { return; }
+
+		if (this.enabled) {
+			ctx.strokeStyle = "black";
+			ctx.fillStyle = "black";
+		} else {
+			ctx.strokeStyle = "gray";
+			ctx.fillStyle = "gray";
+		}
+	
+		var buttonDims = this.buttonDims();
+		ctx.lineWidth = 1 * r;
+		ctx.lineJoin = "round";
+		
+		if (this.clicked) {
+			ctx.fillRect(buttonDims.left, buttonDims.top, buttonDims.width, buttonDims.height);
+		} else {
+			ctx.strokeRect(buttonDims.left, buttonDims.top, buttonDims.width, buttonDims.height);
+		}
+	}
+}
+
 //////////  Functions  \\\\\\\\\\
 
 ///// Game state \\\\\
 
 function initLabels() {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	labels["error msg"] = new Label({x: 0.5, y: 0.97}, "", 20);
+	labels["error msg"] = new Label({x: 0.5, y: 0.98}, "", 20);
 	// Main menu
 	labels["title_3"] = new ImageLabel({x: 0.35, y: 0.15}, false, 0.3, `/images/cards/3S.png`);
 	labels["title_5"] = new ImageLabel({x: 0.5, y: 0.15}, false, 0.3, `/images/cards/5S.png`);
@@ -391,11 +467,17 @@ function initLabels() {
 	labels["pot"] = new Label({x: 0.15, y: 0.4}, "Pot: $", 30);
 	labels["token goal"] = new Label({x: 0.06, y: 0.45}, "Token Goal: ", 20, "left");
 	labels["message"] = new Label({x: 0.5, y: 0.4}, "", 30);
-	labels["hand message"] = new Label({x: 0.5, y: 0.6}, "Hand Message", 20);
+	labels["hand message"] = new Label({x: 0.74, y: 0.64}, "Hand Message", 20, "right");
 	labels["deal"] = new Button({x: 0.2, y: 0.8}, "Deal", 30, doDeal, undefined, false);
 
+	// Player settings
+	labels["auto"] = new Label({x: 0.06, y: 0.87}, "Auto Drop/Deal:", 15, "left");
+	labels["auto box"] = new Checkbox({x: 0.18, y: 0.86}, 0.015);
+
+	// Game settings (bottom bar)
 	labels["sound"] = new ImageButton({x: 0.91, y: 0.97}, 0.02, 0.025, "/images/sound_off.png", disableSound, "/images/sound_on.png", enableSound);
 
+	// Sounds
 	sounds["count"] = new sound("/sounds/racestart.wav");
 }
 
@@ -409,6 +491,9 @@ function changeState(state) {
 	}
 	toggleInputs(false);
 	labels["sound"].enable();
+	if (state !== MAIN_MENU) {
+		labels["auto box"].enable();
+	}
 	switch(state) {
 		case MAIN_MENU:
 			labels["make table"].enable();
@@ -416,15 +501,22 @@ function changeState(state) {
 			toggleInputs(true);
 			break;
 		case TABLE_LOBBY:
-			labels["deal"].enable();
 			labels["leave table"].enable();
+			break;
 		case TABLE_GAME:
 			if (!thePlayer.moved) {
 				labels["deal"].enable();
+				if (labels["auto box"].clicked) {
+					labels["deal"].toggle();
+				}
 			}
+			break;
 		case TABLE_ROUND:
 			labels["hold"].enable();
 			labels["drop"].enable();
+			if (labels["auto box"].clicked) {
+				labels["drop"].click();
+			}
 			break;
 		case TABLE_COUNT:
 			var clicked = labels["hold"].clicked;
@@ -473,6 +565,7 @@ function doHold() {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	// TODO: implement exclusive button set?
 	labels["drop"].clicked = false;
+	labels["auto box"].clicked = false;
 	doMove(true, true);
 }
 
@@ -492,10 +585,6 @@ function doMove(moved, held) {
 	socket.emit("do move", moved, held);
 }
 
-function updateHand(playerId, hand) {
-	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	hands[playerId] = hand;
-}
 }
 
 ///// Client-server functions \\\\\
