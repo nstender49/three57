@@ -586,7 +586,7 @@ var clickCursor = false,
 	LEDGER_COLOR = "#FDFD96",
 	POKER_RED = "#A62121";
 
-var VERSION = "v0.1.1";
+var VERSION = "v0.1.2";
 var ELEM_CONFIGS = [
 	{
 		name: "player-name",
