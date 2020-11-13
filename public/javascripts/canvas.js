@@ -374,7 +374,7 @@ var VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 var SUITS = ["C", "D", "H", "S"];
 var CARD_BACK = undefined;
 var CARDS = [];
-var CARD_SETS = ["bicycle1", "bicycle", "bridge"];
+var CARD_SETS = ["bicycle1"];
 var CARD_RATIO = 1.4;
 
 
