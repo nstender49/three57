@@ -30,7 +30,7 @@ function compareResults(hand, best) {
 }
 
 function compareValues(vals1, vals2) {
-    if (!val1 && !vals2) { return TIE; }
+    if (!vals1 && !vals2) { return TIE; }
     if (!vals2) { return WIN; }
     // Compare value
     for (var i = 0; i < vals1.length; ++i) {
