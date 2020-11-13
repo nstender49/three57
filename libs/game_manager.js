@@ -301,8 +301,8 @@ function handleNewGame(table) {
 		// TODO send error message to player?
 		return;
 	}
-	for (var player of table.players) {
-		player.tokens = 0;
+	for (var tablePlayer of table.players) {
+		tablePlayer.tokens = 0;
 	}
 	// Game holds things we do not want to send to players, e.g. the deck.
 	var game = getGameByCode(table.code);
@@ -426,6 +426,7 @@ function handleToken(table, holderSessionId) {
 function handleContest(table, holdingPlayers) {
 	// Compare hands to find winner, and adjust money.
 	var winners = handComparison.getWinner(holdingPlayers);
+	var winnerNames = [];
 	for (var tablePlayer of table.players) {
 		var player = getPlayerBySessionId(tablePlayer.sessionId);
 		if (player.held) {

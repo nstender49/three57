@@ -11,7 +11,7 @@ module.exports.getWinner = function(players) {
         var compare = compareResults(player.hand.cards, best);
         if (compare === WIN) {
             winners = [player.sessionId];
-            best = player.hand.value;
+            best = player.hand.hand;
         } else if (compare === TIE) {
             winners.push(player.sessionId);
         }
@@ -20,7 +20,7 @@ module.exports.getWinner = function(players) {
 }
 
 function compareResults(hand, best) {
-    if (!bestResult) {
+    if (!best) {
         return WIN;
     }
     // Compare ranks
@@ -66,7 +66,7 @@ module.exports.handToString = function(hand) {
             }
             return s;
         case TWO_PAIR:
-            return "Two Pair " + hand.values[0] + "s over " + hand.values[1] + "s - Kicker: " + hand.kickers[1];
+            return "Two Pair " + hand.values[0] + "s over " + hand.values[1] + "s - Kicker: " + hand.values[2];
         case ONE_PAIR:
             var s = "Pair of " + hand.values[0] + "s";
             if (hand.values.length > 1) {
