@@ -17,6 +17,8 @@ function init() {
 	handleResize();
 }
 
+var cursorX, cursorY;
+
 function animate() {
 	requestAnimFrame(animate);
 	draw();
@@ -24,8 +26,10 @@ function animate() {
 
 //////////  Events  \\\\\\\\\\
 function handleMouseMove(event) {
+	cursorX = event.pageX - canvas.offsetLeft;
+	cursorY = event.pageY - canvas.offsetTop;
 	for (var button of Object.values(buttons)) {
-		if (isOnButton(event, button)) {
+		if (isOnButton(button)) {
 			if (!clickCursor) {
 				$("#game-canvas").css("cursor", "pointer");
 				clickCursor = true;
@@ -45,7 +49,7 @@ function handleMouseMove(event) {
 function handleMouseDown(event) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	for (var button of Object.values(buttons)) {
-		if (isOnButton(event, button)) {
+		if (isOnButton(button)) {
 			button.down = true;
 			return;
 		}
@@ -113,12 +117,10 @@ function getGameCodeInput() {
 	return code ? code : false;
 }
 
-function isOnButton(event, button) {
-	var x = (event.pageX - canvas.offsetLeft),
-		y = (event.pageY - canvas.offsetTop);
+function isOnButton(button) {
 	if (button.enabled) {
 		buttonDims = button.buttonDims();
-		return x >= buttonDims.left && x <= buttonDims.right && y <= buttonDims.bot && y >= buttonDims.top;
+		return cursorX >= buttonDims.left && cursorX <= buttonDims.right && cursorY <= buttonDims.bot && cursorY >= buttonDims.top;
 	}
 	return false;
 }
@@ -140,9 +142,15 @@ function handleResize() {
 		elem.style.position = "absolute";
 		elem.style.left = (canvas.getBoundingClientRect().left + canvas.width * config.x) + "px";
 		elem.style.top = (canvas.getBoundingClientRect().top + canvas.height * config.y) + "px";
-		elem.style.width = (canvas.width * config.w) + "px";
-		elem.style.height = (canvas.height * config.h) + "px";
-		elem.style.fontSize = (40 * r) + "px";
+		if (config.w) {
+			elem.style.width = (canvas.width * config.w) + "px";
+			elem.style.height = (canvas.height * config.h) + "px";
+			elem.style.fontSize = (40 * r) + "px";
+		}
+		if (config.size) {
+			elem.style.fontSize = (config.size * r) + "px";
+		}
+
 	}
 	if (DEBUG) {
 		document.getElementById("player-name").value = "P" + Math.floor(Math.random() * 100);
@@ -155,11 +163,27 @@ function handleResize() {
 function draw() {
 	drawRect(BACKGROUND_COLOR, 0, 0, 1, 1);
 
+	// Check for holding buttons.
+	for (var button of Object.values(buttons)) {
+		button.checkHold();
+	}
 	switch (gameState) {
 		case INIT:
 			break;
 		case MAIN_MENU:
 			drawGroups["main menu"].draw();
+			if (importLedger && importLedger.length > 0) {
+				buttons["clear ledger"].enable();
+				buttons["download ledger main"].enable();
+				labels["import ledger"].visible = false;
+				document.getElementById("ledger-file").style.display = "none";
+				document.getElementById("ledger-file").value = null;
+			} else {
+				buttons["clear ledger"].disable();
+				buttons["download ledger main"].disable();
+				labels["import ledger"].visible = true;
+				document.getElementById("ledger-file").style.display = "block";
+			}
 			break;
 		case TABLE_LOBBY:
 			drawTable();
@@ -211,7 +235,6 @@ function drawTable() {
 				continue;
 			}
 			handMessage = new Label({x: 0.27, y: 0.45 + 0.2 * i / numRow}, `${name}: ${hands[name].text}`, 80 / numRow, "left");
-			console.log(0.45 + 0.2 * i / numRow);
 			handMessage.draw();
 			i++;
 		}
@@ -305,7 +328,7 @@ function drawPlayerPad(player, x, y, width, height) {
 	name.draw(true);
 
 	// Similarly, make sure tokens and money fit.
-	var money = new Label({x: absX + labelMargin, y: absY + absH - labelMargin}, `$ ${player.money}`, 20, "left");
+	var money = new Label({x: absX + labelMargin, y: absY + absH - labelMargin}, formatMoney(player.money), 20, "left");
 	var tokens = new Label({x: absX - labelMargin + nameW, y: absY + absH - labelMargin}, `Tokens: ${player.tokens}`, 20, "right");
 	scaleLabelsToWidth([money, tokens], nameW, labelMargin);
 	money.draw(true);
@@ -313,14 +336,22 @@ function drawPlayerPad(player, x, y, width, height) {
 
 	// Draw the hand.
 	if (gameState !== TABLE_LOBBY) {
-		drawHand(absX + nameW, absY, cardW, absH, hands[player.name], theTable.round);
+		drawHand(absX + nameW, absY, cardW, absH, hands[player.name]);
 	}
+}
+
+function round(num, digits = 0) {
+	return Math.round((num + Number.EPSILON) * Math.pow(10, digits)) / Math.pow(10, digits);
+}
+
+function formatMoney(value) {
+	return Math.abs(value) > 0 && Math.abs(value) < 1 ? `₵ ${round(value * 100)}` : `$ ${round(value, 2)}`;
 }
 
 function drawLedger() {
 	// Background and title
 	drawRect(LEDGER_COLOR, 0.75, 0.35, 0.2, 0.3);
-	labels["ledger"].draw();
+	drawGroups["ledger"].draw();
 
 	// Player names.
 	var absX = canvas.width * 0.75;
@@ -331,7 +362,7 @@ function drawLedger() {
 	for (var i = 0; i < theTable.ledger.length; ++i) {
 		var l = theTable.ledger[i];
 		var nameLabel = new Label({x: absX + margin, y: absY + absRowH * i}, l.name, 15, "left");
-		var valLabel = new Label({x: absX + absW - margin, y: absY + absRowH * i}, "$"+ l.money, 15, "right");
+		var valLabel = new Label({x: absX + absW - margin, y: absY + absRowH * i}, formatMoney(l.money), 15, "right");
 		scaleLabelsToWidth([nameLabel, valLabel], absW, margin)
 		nameLabel.draw(true);
 		valLabel.draw(true);
@@ -352,16 +383,16 @@ function scaleLabelsToWidth(labels, width, margin) {
 	}
 }
 
-function drawHand(absX, absY, absW, absH, hand, handLen) {
+function drawHand(absX, absY, absW, absH, hand) {
 	var cardHeight = absH * 0.9;
 	var cardWidth = cardHeight / CARD_RATIO;
 	// Gap between cards is either MIN_GAP * cardWidth, or negative to stack cards if there are too many.
 	var minGap = cardWidth * 0.1
-	var gapWidth = Math.min(minGap, (absW - 2 * minGap - handLen * cardWidth) / (handLen - 1));
-	for (var i = 0; i < handLen; i++) {
+	var gapWidth = Math.min(minGap, (absW - 2 * minGap - theTable.round * cardWidth) / (theTable.round - 1));
+	for (var i = 0; i < theTable.round; i++) {
 		drawCard(
 			hand ? hand.cards[i] : undefined,
-			absX + absW / 2 - ((handLen - 1) / 2 * gapWidth) - (handLen / 2 * cardWidth) + (cardWidth + gapWidth) * i,
+			absX + absW / 2 - ((theTable.round - 1) / 2 * gapWidth) - (theTable.round  / 2 * cardWidth) + (cardWidth + gapWidth) * i,
 			absY + absH * 0.05,
 			cardWidth,
 			cardHeight,
@@ -373,18 +404,20 @@ var VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 var SUITS = ["C", "D", "H", "S"];
 var CARD_BACK = undefined;
 var CARDS = [];
+var CARD_RATIO = 1.4;
 
 function initCards() {
 	for (var suit of SUITS) {
 		CARDS[suit] = [];
 		for (var value of VALUES) {
 			var img = new Image;
-			//img.src = `/images/cards/${cardSet}/${value}${suit}.png`;
 			img.src = `/images/cards/${value}${suit}.png`;
 			CARDS[suit][value] = img;
 		}
 	}
-	CARD_RATIO = CARDS["S"]["A"].height / CARDS["S"]["A"].width;
+	CARDS["S"]["A"].onload = function () {
+		CARD_RATIO = CARDS["S"]["A"].height / CARDS["S"]["A"].width;
+	}
 	var img = new Image;
 	img.src = `/images/cards/BACK.png`;
 	CARD_BACK = img;
@@ -430,6 +463,106 @@ function initInputs() {
 	input.style.textTransform = "uppercase";
 	input.style.display = "none";
 	container.appendChild(input);
+	input = document.createElement("input");
+	input.id = "ledger-file";
+	input.type = "file";
+	input.accept = ".txt";
+	input.addEventListener("change", loadLedgerFile);
+	container.appendChild(input);
+}
+
+function loadLedgerFile() {
+	var input = document.getElementById("ledger-file");
+	if (input.files[0]) {
+		var fr = new FileReader();
+		fr.onload = function() {
+			if (this.error) {
+				raiseError("Failed to import ledger file!");
+				return;
+			}
+			readLedgerString(this.result);
+		}
+		fr.readAsText(input.files[0]);
+	}
+}
+
+function readLedgerString(str) {
+	var lines = str.split('\n');
+	importLedger = [];
+	for (var line of lines) {
+		var sp = line.split(":");
+		money = Number(sp[1]);
+		if (!money && money !== 0) {
+			raiseError(`Failed to process ledger entry for ${sp[0]}: ${sp[1]}`);
+			importLedger = [];
+			return;
+		}
+		importLedger.push({name: sp[0], money: Number(sp[1])});
+	}
+}
+
+function clearZeros(ledger) {
+	var newLedger = [];
+	for (var l of ledger) {
+		if (l.money === 0) {
+			continue;
+		}
+		newLedger.push(l);
+	}
+	return newLedger;
+}
+
+function downloadLedgerFile() {
+	if (!importLedger && !theTable) {
+		raiseError("No ledger stored!");
+		return;
+	}
+	var ledger = theTable ? theTable.ledger : importLedger;
+	// Create the text content
+	var lines = [];
+	for (var l of clearZeros(ledger)) {
+		if (l.money === 0) {
+			continue;
+		}
+		lines.push(`${l.name}:${l.money}`);
+	}
+	var content = lines.join('\n');
+	downloadFile(content, "ledger.txt");
+}
+
+function downloadFile(strData, strFileName, strMimeType) {
+    var a = document.createElement("a");
+
+    //build download link:
+    a.href = "data:" + strMimeType + "charset=utf-8," + escape(strData);
+
+    if (window.MSBlobBuilder) { // IE10
+        var bb = new MSBlobBuilder();
+        bb.append(strData);
+        return navigator.msSaveBlob(bb, strFileName);
+    }
+
+    if ('download' in a) { //FF20, CH19
+        a.setAttribute("download", strFileName);
+        a.innerHTML = "downloading...";
+        document.body.appendChild(a);
+        setTimeout(function() {
+            var e = document.createEvent("MouseEvents");
+            e.initMouseEvent("click", true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+            a.dispatchEvent(e);
+            document.body.removeChild(a);
+        }, 66);
+        return true;
+    }
+
+    //do iframe dataURL download: (older W3)
+    var f = document.createElement("iframe");
+    document.body.appendChild(f);
+    f.src = "data:" + (A[2] ? A[2] : "application/octet-stream") + (window.btoa ? ";base64" : "") + "," + (window.btoa ? window.btoa : escape)(strData);
+    setTimeout(function() {
+        document.body.removeChild(f);
+    }, 333);
+    return true;
 }
 
 window.requestAnimFrame = (function () {
@@ -439,7 +572,7 @@ window.requestAnimFrame = (function () {
 		   window.oRequestAnimationFrame ||
 		   window.msRequestAnimationFrame ||
 		   function (callback, element) {
-			   window.setTimeout(callback, 1000 / 60);
+			   window.setTimeout(callback, 1000 / 30);
 		   };
 })();
 
@@ -453,7 +586,7 @@ var clickCursor = false,
 	LEDGER_COLOR = "#FDFD96",
 	POKER_RED = "#A62121";
 
-var VERSION = "v0.1.0";
+var VERSION = "v0.1.1";
 var ELEM_CONFIGS = [
 	{
 		name: "player-name",
@@ -468,6 +601,12 @@ var ELEM_CONFIGS = [
 		y: 0.63,
 		w: 0.12,
 		h: 0.09,
+	},
+	{
+		name: "ledger-file",
+		x: 0.45,
+		y: 0.9,
+		size: 15,
 	},
 ];
 

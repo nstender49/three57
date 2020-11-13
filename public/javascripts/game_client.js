@@ -15,14 +15,15 @@ var logFull = true;
 
 // Config settings received from server.
 var newTableSettings = {
-	tokenGoal: DEBUG ? 2 : 5,
+	tokenGoal: 5,
 	startPot: 1,
 	crazy: false,
 	straights: false,
 	qakaj: true,
 	five_of_a_kind: true,
-	advanceSec: DEBUG ? 1 : 3,
+	advanceSec: 3,
 }
+var importLedger = [];
 
 // Game settings
 var soundEnabled = false;
@@ -60,6 +61,10 @@ socket.on("server error", function(msg) {
 
 socket.on("init settings", function(debug) {
 	DEBUG = debug;
+	if (DEBUG) {
+		newTableSettings.tokenGoal = 2;
+		newTableSettings.advanceSec = 1;
+	}
 	handleResize();
 });
 
@@ -70,6 +75,7 @@ socket.on("disconnect", function() {
 });
 
 //////////  Constructors  \\\\\\\\\\
+
 class Label {
 	constructor(position, text, size, align, font) {
 		// if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
@@ -124,7 +130,7 @@ class Label {
 }
 
 class Button {
-	constructor(position, text, size, callback, uncallback, align, border, font) {
+	constructor(position, text, size, callback, uncallback, holdable, align, border, margin, font) {
 		this.position = position;
 		this.text = text;
 		this.size = size;
@@ -138,7 +144,23 @@ class Button {
 		this.focus = false;
 		this.clicked = false;
 		this.undoEnabled = true;
+		this.margin = margin || 20;
 		this.border = border === undefined ? true : border;
+		this.holdable = holdable;
+		this.holdTicks = 0;
+	}
+
+	checkHold() {
+		if (!this.holdable || !this.enabled || !this.down) {
+			return;
+		}
+		if (isOnButton(this)) {
+			this.holdTicks += 1;
+			if (this.holdTicks === 15) {
+				this.click();
+				this.holdTicks = 0;
+			} 
+		}
 	}
 
 	toggle() {
@@ -201,7 +223,7 @@ class Button {
 
 	buttonDims() {
 		var dims = this.dims();
-		var margin = 20 * r;
+		var margin = this.margin * r;
 	
 		// Top left corner.
 		var minX = canvas.width * this.position.x - margin * 0.5;
@@ -320,6 +342,8 @@ class ImageButton {
 		return this.on ? this.on_src : this.off_src;
 	}
 
+	checkHold() {}
+
 	toggle() {
 		if (!this.enabled) {
 			return;
@@ -389,6 +413,8 @@ class Checkbox {
 		this.visible = true;
 		this.clicked = false;
 	}
+
+	checkHold() {}
 
 	toggle() {
 		if (!this.enabled) {
@@ -487,6 +513,7 @@ class ButtonGroup  {
 	}
 }
 
+
 //////////  Functions  \\\\\\\\\\
 
 ///// Game state \\\\\
@@ -499,25 +526,31 @@ function initLabels() {
 	labels["title_7"] = new ImageLabel({x: 0.65, y: 0.15}, false, 0.3, `/images/cards/7S.png`);
 	buttons["make table"] = new Button({x: 0.5, y: 0.6}, "Make Table", 80, makeTable);
 	buttons["join table"] = new Button({x: 0.5, y: 0.85}, " Join Table ", 80, joinTable);
+	labels["import ledger"] = new Label({x: 0.44, y: 0.925}, "Import Ledger", 15, "right");
+	buttons["clear ledger"] = new Button({x: 0.42, y: 0.925}, "Clear Ledger", 15, clearLedger);
+	buttons["download ledger main"] = new Button({x: 0.56, y: 0.925}, "Download Ledger", 15, downloadLedgerFile);
 	drawGroups["main menu"] = new DrawGroup([
 		labels["title_3"],
 		labels["title_5"], 
 		labels["title_7"],
 		buttons["make table"],
-		buttons["join table"]
+		buttons["join table"],
+		labels["import ledger"],
+		buttons["clear ledger"],
+		buttons["download ledger main"],
 	]);
 
 	// Table
 
 	// Game settings (left box)
 	labels["pot"] = new Label({x: 0.06, y: 0.41}, "Pot: ", 30, "left");
-	buttons["pot <"] = new Button({x: 0.16, y: 0.4}, "<", 20, changePot.bind(null, false), false, "center", false);
+	buttons["pot <"] = new Button({x: 0.16, y: 0.4}, "-", 20, changePot.bind(null, false), false, true, "center", false);
 	labels["pot value"] = new Label({x: 0.23, y: 0.41}, "", 30, "right");
-	buttons["pot >"] = new Button({x: 0.24, y: 0.4}, ">", 20, changePot.bind(null, true), false, "center", false);
+	buttons["pot >"] = new Button({x: 0.24, y: 0.4}, "+", 20, changePot.bind(null, true), false, true, "center", false);
 	labels["token goal"] = new Label({x: 0.06, y: 0.46}, "Token Goal: ", 15, "left");
-	buttons["token goal <"] = new Button({x: 0.20, y: 0.46}, "<", 15, changeTokens.bind(null, false), false, "center", false);
+	buttons["token goal <"] = new Button({x: 0.20, y: 0.46}, "-", 15, changeTokens.bind(null, false), false, true, "center", false);
 	labels["token goal num"] = new Label({x: 0.22, y: 0.46}, "", 15);
-	buttons["token goal >"] = new Button({x: 0.24, y: 0.46}, ">", 15, changeTokens.bind(null, true), false, "center", false);
+	buttons["token goal >"] = new Button({x: 0.24, y: 0.46}, "+", 15, changeTokens.bind(null, true), false, true, "center", false);
 	labels["crazy"] = new Label({x: 0.06, y: 0.50}, "Crazy: ", 15, "left");
 	buttons["crazy box"] = new Checkbox({x: 0.22, y: 0.49}, 0.015, updateSettings);
 	labels["straights"] = new Label({x: 0.06, y: 0.54}, "Straights: ", 15, "left");
@@ -567,11 +600,16 @@ function initLabels() {
 
 	// Ledger
 	labels["ledger"] = new Label({x: 0.85, y: 0.4}, "Ledger", 30);
+	buttons["download ledger"] = new Button({x: 0.92, y: 0.395}, "⇩", 20, downloadLedgerFile, false, false, false, true, 15);
+	drawGroups["ledger"] = new DrawGroup([
+		labels["ledger"],
+		buttons["download ledger"],
+	]);
 		
 	// Player pad
-	buttons["hold"] = new Button({x: 0.13, y: 0.8}, "Hold", 30, doHold, doClearMove, false);
-	buttons["drop"] = new Button({x: 0.27, y: 0.8}, "Drop", 30, doDrop, doClearMove, false);
-	buttons["deal"] = new Button({x: 0.2, y: 0.8}, "Deal", 30, doDeal, undefined, false);
+	buttons["hold"] = new Button({x: 0.13, y: 0.8}, "Hold", 30, doHold, doClearMove);
+	buttons["drop"] = new Button({x: 0.27, y: 0.8}, "Drop", 30, doDrop, doClearMove);
+	buttons["deal"] = new Button({x: 0.2, y: 0.8}, "Deal", 30, doDeal);
 	labels["auto"] = new Label({x: 0.06, y: 0.87}, "Auto Drop/Deal:", 15, "left");
 	buttons["auto box"] = new Checkbox({x: 0.18, y: 0.86}, 0.015);
 	drawGroups["player pad"] = new DrawGroup([
@@ -596,6 +634,11 @@ function initLabels() {
 
 	// Sounds
 	sounds["count"] = new sound("/sounds/racestart.wav");
+}
+
+function clearLedger() {
+	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
+	importLedger = [];
 }
 
 START_POTS = [0.05, 0.1, 0.25, 0.5, 1, 2, 5];
@@ -630,6 +673,7 @@ function changeState(state) {
 	buttons["sound"].enable();
 	if (state !== MAIN_MENU) {
 		buttons["auto box"].enable();
+		buttons["download ledger"].enable();
 	}
 
 	switch(state) {
@@ -671,6 +715,7 @@ function toggleInputs(on) {
 	for (var e of ELEM_CONFIGS) {
 		document.getElementById(e.name).style.display = d;
 	}
+	document.getElementById("ledger-file").value = null;
 }
 
 function enableSound() {
@@ -688,13 +733,6 @@ function disableSound() {
 
 {
 function isTableOwner() {
-	console.log("OWNER?");
-	console.log(theTable);
-	if (theTable) {
-		console.log(theTable.players.length);
-		console.log(theTable.players[0].socketId);
-		console.log(socket.id);
-	}
 	return theTable && theTable.players.length > 0 && theTable.players[0].socketId === socket.id;
 }
 
@@ -736,7 +774,7 @@ function makeTable() {
 	var name = getPlayerNameInput()
 	// TODO: make settings and send them here.
 	if (name) {
-		socket.emit("make table", name, newTableSettings);
+		socket.emit("make table", name, newTableSettings, importLedger);
 	} else {
 		raiseError("Must provide name to make table!");
 	}
@@ -766,20 +804,23 @@ function updateTable(table) {
 		}
 		var change = !theTable || theTable.state != table.state;
 		theTable = table;
+		console.log(theTable);
 		if (change) {
 			changeState(table.state);
 		}
 		labels["message"].text = table.message;
 		labels["table"].text = `Table ${table.code}`;
-		var potVal = table.state === TABLE_LOBBY ? table.settings.startPot : table.pot;
-		labels["pot value"].text = (potVal > 0 && potVal < 1) ? "₵ " + (potVal * 100) : "$ " + potVal;
+		labels["pot value"].text = formatMoney(table.state === TABLE_LOBBY ? table.settings.startPot : table.pot);
 		labels["token goal num"].text = table.settings.tokenGoal;
 		buttons["crazy box"].clicked = table.settings.crazy;
 		buttons["straights box"].clicked = table.settings.straights;
 		buttons["5ofk box"].clicked = table.settings.five_of_a_kind;
 		buttons["QAKAJ box"].clicked = table.settings.qakaj;
 	} else {
-		theTable = undefined;
+		if (theTable) {
+			importLedger = clearZeros(theTable.ledger);
+		}
+		theTable = false;
 		changeState(MAIN_MENU);
 	}
 }
@@ -790,8 +831,14 @@ function leaveTable() {
 }
 
 function handleServerDisconnect() {
-	raiseError("Server disconnected");
-	// TODO : offer to print ledger and money
+	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
+	var msg = "Server disconnected!";
+	if (theTable && theTable.ledger.length > 0) {
+		importLedger = clearZeros(theTable.ledger);
+		msg += " Ledger saved locally.";
+	}
+	raiseError(msg);
+	theTable = false;
 	changeState(MAIN_MENU);
 }
 

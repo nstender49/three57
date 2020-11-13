@@ -43,8 +43,8 @@ module.exports.listen = function(app) {
 			playerDisconnected(socket);
 		});
 
-		socket.on("make table", function(name, settings) {
-			var code = createTable(settings);
+		socket.on("make table", function(name, settings, ledger) {
+			var code = createTable(settings, ledger);
 			joinTable(socket, code, name);
 		});
 
@@ -71,7 +71,7 @@ module.exports.listen = function(app) {
 
 ///// Lobby \\\\\
 
-function createTable(settings) {
+function createTable(settings, ledger) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	var table = {
 		code: createTableCode(),
@@ -80,7 +80,7 @@ function createTable(settings) {
 		state: TABLE_LOBBY,
 		message: "Waiting for players to join...",
 		settings: settings,
-		ledger: [],
+		ledger: ledger,
 	};
 	tables.push(table);
 	return table.code;
@@ -428,7 +428,7 @@ function handleToken(table, holderSessionId) {
 		return false;
 	}
 	// Handle game end.
-	tablePlayer.money += table.pot - table.settings.startPot;
+	tablePlayer.money += round(table.pot - table.settings.startPot, 2);
 	table.message = tablePlayer.name + " wins!";
 	for (var tablePlayer of table.players) {
 		var player = getPlayerBySessionId(tablePlayer.sessionId);
@@ -438,13 +438,17 @@ function handleToken(table, holderSessionId) {
 		// Transfer money to debt sheet
 		for (var l of table.ledger) {
 			if (l.name === tablePlayer.name) {
-				l.money += tablePlayer.money;
+				l.money += round(tablePlayer.money, 2);
 				break;
 			}
 		}
 		tablePlayer.money = 0;
 	}
 	return true;
+}
+
+function round(num, digits = 0) {
+	return Math.round((num + Number.EPSILON) * Math.pow(10, digits)) / Math.pow(10, digits);
 }
 
 function handleContest(table, holdingPlayers) {
@@ -456,9 +460,9 @@ function handleContest(table, holdingPlayers) {
 		if (player.held) {
 			if (winners.includes(tablePlayer.sessionId)) {
 				winnerNames.push(tablePlayer.name);
-				tablePlayer.money += table.pot * (holdingPlayers.length - winners.length) / winners.length;
+				tablePlayer.money += round(table.pot * (holdingPlayers.length - winners.length) / winners.length, 2);
 			} else {
-				tablePlayer.money -= table.pot * 2;
+				tablePlayer.money -= round(table.pot * 2, 2)
 			}
 		}
 	}
