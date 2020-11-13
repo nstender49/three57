@@ -8,33 +8,45 @@ TABLE_LOBBY = "table lobby";
 TABLE_GAME = "table game";
 TABLE_ROUND = "table round";
 TABLE_COUNT = "table count";
-DEBUG = false;
 
-var socket = io();
-var gameState = undefined;
-var theTable = undefined;
-var tableReady = false;
-var soundEnabled = false;
+// Debug settings
+DEBUG = false;
 var logFull = true;
+
+// Config settings received from server.
+var newTableSettings = {
+	tokenGoal: DEBUG ? 2 : 5,
+	startPot: 1,
+	crazy: false,
+	straights: false,
+	qakaj: true,
+	five_of_a_kind: true,
+	advanceSec: DEBUG ? 1 : 3,
+}
+
+// Game settings
+var soundEnabled = false;
+
+// Game state
+var socket = io();
 var labels = [];
+var buttons = [];
+var drawGroups = [];
+var buttonGroups = [];
 var sounds = [];
 
-var thePlayer;
+var gameState, theTable, thePlayer;
 var hands = [];
 var holders = [];
 
 //////////  Socket Events  \\\\\\\\\\
-
-///// Game events \\\\\
 
 socket.on("update table", function(table) {
 	updateTable(table);
 });
 
 socket.on("update hand", function(name, hand, clear) {
-	if (clear) {
-		hands = [];
-	}
+	if (clear) { hands = []; }
 	hands[name] = hand;
 });
 
@@ -46,7 +58,7 @@ socket.on("server error", function(msg) {
 	raiseError(msg);
 });
 
-socket.on("set debug", function(debug) {
+socket.on("init settings", function(debug) {
 	DEBUG = debug;
 	handleResize();
 });
@@ -112,7 +124,7 @@ class Label {
 }
 
 class Button {
-	constructor(position, text, size, callback, uncallback, visible, align, font) {
+	constructor(position, text, size, callback, uncallback, align, border, font) {
 		this.position = position;
 		this.text = text;
 		this.size = size;
@@ -122,10 +134,11 @@ class Button {
 		this.uncallback = uncallback;
 		this.down = false;
 		this.enabled = false;
-		this.visible = visible === undefined ? true : visible;
+		this.visible = true;
 		this.focus = false;
 		this.clicked = false;
 		this.undoEnabled = true;
+		this.border = border === undefined ? true : border;
 	}
 
 	toggle() {
@@ -152,11 +165,9 @@ class Button {
 	}
 
 	unclick() {
-		console.log("IN UNCLICK");
 		if (!this.enabled) {
 			return;
 		}
-		console.log(`${this.clicked} ${this.undoEnabled}`);
 		if (this.clicked && this.uncallback && this.undoEnabled) {
 			this.clicked = false;
 			this.uncallback();
@@ -229,9 +240,11 @@ class Button {
 		ctx.font = (this.size * r) + "px " + this.font;
 	
 		var buttonDims = this.buttonDims();
-		ctx.lineWidth = 3 * r;
+		ctx.lineWidth = this.border * r;
 		ctx.lineJoin = "round";
-		ctx.strokeRect(buttonDims.left, buttonDims.top, buttonDims.width, buttonDims.height);
+		if (this.border) {
+			ctx.strokeRect(buttonDims.left, buttonDims.top, buttonDims.width, buttonDims.height);
+		}
 
 		ctx.textBaseline = "center";
 		ctx.textAlign = this.align;
@@ -382,15 +395,16 @@ class Checkbox {
 			return;
 		}
 		this.clicked = !this.clicked;
+		if (this.callback) {
+			this.callback();
+		}
 	}
 
 	enable() {
-		this.visible = true;
 		this.enabled = true;
 	}
 
 	disable() {
-		this.visible = false;
 		this.enabled = false;
 	}
 
@@ -443,42 +457,164 @@ class Checkbox {
 	}
 }
 
+class DrawGroup {
+	constructor(draws) {
+		this.draws = draws;
+	}
+
+	draw() {
+		for (var d of this.draws) {
+			d.draw();
+		}
+	}
+}
+
+class ButtonGroup  {
+	constructor(buttons) {
+		this.buttons = buttons;
+	}
+
+	enable() {
+		for (var b of this.buttons) {
+			b.enable();
+		}
+	}
+	
+	disable() {
+		for (var b of this.buttons) {
+			b.disable();
+		}
+	}
+}
+
 //////////  Functions  \\\\\\\\\\
 
 ///// Game state \\\\\
 
 function initLabels() {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	labels["error msg"] = new Label({x: 0.5, y: 0.98}, "", 20);
 	// Main menu
 	labels["title_3"] = new ImageLabel({x: 0.35, y: 0.15}, false, 0.3, `/images/cards/3S.png`);
 	labels["title_5"] = new ImageLabel({x: 0.5, y: 0.15}, false, 0.3, `/images/cards/5S.png`);
 	labels["title_7"] = new ImageLabel({x: 0.65, y: 0.15}, false, 0.3, `/images/cards/7S.png`);
-	labels["make table"] = new Button({x: 0.5, y: 0.6},  "Make Table", 80, makeTable);
-	labels["join table"] = new Button({x: 0.5, y: 0.85}, " Join Table ", 80, joinTable);
-	// Table
-	labels["table"] = new Label({x: 0.01, y: 0.99}, "", 15, "left");
-	labels["version"] = new Label({x: 0.99, y: 0.99}, VERSION, 15, "right", "monospace");
-	labels["leave table"] = new Button({x: 0.5, y: 0.6}, "Leave", 30, leaveTable);
-	labels["ledger"] = new Label({x: 0.85, y: 0.4}, "Ledger", 30);
-	// Game
-	labels["hold"] = new Button({x: 0.13, y: 0.8}, "Hold", 30, doHold, doClearMove, false);
-	labels["drop"] = new Button({x: 0.27, y: 0.8}, "Drop", 30, doDrop, doClearMove, false);
-	labels["pot"] = new Label({x: 0.15, y: 0.4}, "Pot: $", 30);
-	labels["token goal"] = new Label({x: 0.06, y: 0.45}, "Token Goal: ", 20, "left");
-	labels["message"] = new Label({x: 0.5, y: 0.4}, "", 30);
-	labels["hand message"] = new Label({x: 0.74, y: 0.64}, "Hand Message", 20, "right");
-	labels["deal"] = new Button({x: 0.2, y: 0.8}, "Deal", 30, doDeal, undefined, false);
+	buttons["make table"] = new Button({x: 0.5, y: 0.6}, "Make Table", 80, makeTable);
+	buttons["join table"] = new Button({x: 0.5, y: 0.85}, " Join Table ", 80, joinTable);
+	drawGroups["main menu"] = new DrawGroup([
+		labels["title_3"],
+		labels["title_5"], 
+		labels["title_7"],
+		buttons["make table"],
+		buttons["join table"]
+	]);
 
-	// Player settings
+	// Table
+
+	// Game settings (left box)
+	labels["pot"] = new Label({x: 0.06, y: 0.41}, "Pot: ", 30, "left");
+	buttons["pot <"] = new Button({x: 0.16, y: 0.4}, "<", 20, changePot.bind(null, false), false, "center", false);
+	labels["pot value"] = new Label({x: 0.23, y: 0.41}, "", 30, "right");
+	buttons["pot >"] = new Button({x: 0.24, y: 0.4}, ">", 20, changePot.bind(null, true), false, "center", false);
+	labels["token goal"] = new Label({x: 0.06, y: 0.46}, "Token Goal: ", 15, "left");
+	buttons["token goal <"] = new Button({x: 0.20, y: 0.46}, "<", 15, changeTokens.bind(null, false), false, "center", false);
+	labels["token goal num"] = new Label({x: 0.22, y: 0.46}, "", 15);
+	buttons["token goal >"] = new Button({x: 0.24, y: 0.46}, ">", 15, changeTokens.bind(null, true), false, "center", false);
+	labels["crazy"] = new Label({x: 0.06, y: 0.50}, "Crazy: ", 15, "left");
+	buttons["crazy box"] = new Checkbox({x: 0.22, y: 0.49}, 0.015, updateSettings);
+	labels["straights"] = new Label({x: 0.06, y: 0.54}, "Straights: ", 15, "left");
+	buttons["straights box"] = new Checkbox({x: 0.22, y: 0.53}, 0.015, updateSettings);
+	labels["5ofk"]  = new Label({x: 0.06, y: 0.58}, "5-of-a-Kind: ", 15, "left");
+	buttons["5ofk box"] = new Checkbox({x: 0.22, y: 0.57}, 0.015, updateSettings);
+	labels["QAKAJ"] = new Label({x: 0.06, y: 0.62}, "QAKAJ: ", 15, "left");
+	buttons["QAKAJ box"] = new Checkbox({x: 0.22, y: 0.61}, 0.015, updateSettings);
+	drawGroups["settings"] = new DrawGroup([
+		labels["pot"],
+		buttons["pot <"],
+		labels["pot value"],
+		buttons["pot >"],
+		labels["token goal"],
+		buttons["token goal <"],
+		labels["token goal num"],
+		buttons["token goal >"],
+		labels["crazy"], 
+		buttons["crazy box"],
+		labels["straights"],
+		buttons["straights box"],
+		labels["5ofk"], 
+		buttons["5ofk box"],
+		labels["QAKAJ"],
+		buttons["QAKAJ box"]
+	]);
+	buttonGroups["settings"] = new ButtonGroup([
+		buttons["pot <"],
+		buttons["pot >"],
+		buttons["token goal <"],
+		buttons["token goal >"],
+		buttons["crazy box"],
+		buttons["straights box"],
+		buttons["5ofk box"],
+		buttons["QAKAJ box"]
+	]);
+
+	// Message box (center)
+	labels["message"] = new Label({x: 0.5, y: 0.4}, "", 30);
+	buttons["leave table"] = new Button({x: 0.5, y: 0.6}, "Leave", 30, leaveTable);
+	labels["hand message"] = new Label({x: 0.74, y: 0.64}, "", 20, "right");
+	drawGroups["messages"] = new DrawGroup([
+		labels["message"],
+		buttons["leave table"],
+		labels["hand message"]
+	]);
+
+	// Ledger
+	labels["ledger"] = new Label({x: 0.85, y: 0.4}, "Ledger", 30);
+		
+	// Player pad
+	buttons["hold"] = new Button({x: 0.13, y: 0.8}, "Hold", 30, doHold, doClearMove, false);
+	buttons["drop"] = new Button({x: 0.27, y: 0.8}, "Drop", 30, doDrop, doClearMove, false);
+	buttons["deal"] = new Button({x: 0.2, y: 0.8}, "Deal", 30, doDeal, undefined, false);
 	labels["auto"] = new Label({x: 0.06, y: 0.87}, "Auto Drop/Deal:", 15, "left");
-	labels["auto box"] = new Checkbox({x: 0.18, y: 0.86}, 0.015);
+	buttons["auto box"] = new Checkbox({x: 0.18, y: 0.86}, 0.015);
+	drawGroups["player pad"] = new DrawGroup([
+		buttons["hold"],
+		buttons["drop"],
+		buttons["deal"], 
+		labels["auto"],
+		buttons["auto box"]
+	]);
 
 	// Game settings (bottom bar)
-	labels["sound"] = new ImageButton({x: 0.91, y: 0.97}, 0.02, 0.025, "/images/sound_off.png", disableSound, "/images/sound_on.png", enableSound);
+	labels["table"] = new Label({x: 0.01, y: 0.99}, "", 15, "left");
+	labels["error msg"] = new Label({x: 0.5, y: 0.98}, "", 20);
+	buttons["sound"] = new ImageButton({x: 0.91, y: 0.97}, 0.02, 0.025, "/images/sound_off.png", disableSound, "/images/sound_on.png", enableSound);
+	labels["version"] = new Label({x: 0.99, y: 0.99}, VERSION, 15, "right", "monospace");
+	drawGroups["bottom bar"] = new DrawGroup([
+		labels["table"],
+		labels["error msg"],
+		buttons["sound"],
+		labels["version"],
+	]);
 
 	// Sounds
 	sounds["count"] = new sound("/sounds/racestart.wav");
+}
+
+START_POTS = [0.05, 0.1, 0.25, 0.5, 1, 2, 5];
+function changePot(up) {
+	theTable.settings.startPot = START_POTS[Math.max(0, Math.min(START_POTS.length - 1, START_POTS.indexOf(theTable.settings.startPot) + (up ? 1 : -1)))];
+	updateSettings();
+}
+
+function changeTokens(up) {
+	theTable.settings.tokenGoal = Math.max(1, theTable.settings.tokenGoal + (up ? 1 : -1));
+	updateSettings();
+}
+
+function updateSettings() {
+	theTable.settings.crazy = buttons["crazy box"].clicked;
+	theTable.settings.straights = buttons["straights box"].clicked;
+	theTable.settings.five_of_a_kind = buttons["5ofk box"].clicked;
+	theTable.settings.qakaj = buttons["QAKAJ box"].clicked;
+	socket.emit("update settings", theTable.settings);
 }
 
 function changeState(state) {
@@ -486,47 +622,45 @@ function changeState(state) {
 	if (state === gameState) {
 		return;
 	}
-	for (var l in labels) { 
-		labels[l].disable();
+	for (var button of Object.values(buttons)) {
+		button.disable();
 	}
 	toggleInputs(false);
-	labels["sound"].enable();
+
+	buttons["sound"].enable();
 	if (state !== MAIN_MENU) {
-		labels["auto box"].enable();
+		buttons["auto box"].enable();
 	}
+
 	switch(state) {
 		case MAIN_MENU:
-			labels["make table"].enable();
-			labels["join table"].enable();
+			buttons["make table"].enable();
+			buttons["join table"].enable();
 			toggleInputs(true);
 			break;
 		case TABLE_LOBBY:
-			labels["leave table"].enable();
+			buttons["leave table"].enable();
 			break;
 		case TABLE_GAME:
 			if (!thePlayer.moved) {
-				labels["deal"].enable();
-				if (labels["auto box"].clicked) {
-					labels["deal"].toggle();
+				buttons["deal"].enable();
+				if (buttons["auto box"].clicked) {
+					buttons["deal"].toggle();
 				}
 			}
 			break;
 		case TABLE_ROUND:
-			labels["hold"].enable();
-			labels["drop"].enable();
-			if (labels["auto box"].clicked) {
-				labels["drop"].click();
+			buttons["hold"].enable();
+			buttons["drop"].enable();
+			if (buttons["auto box"].clicked) {
+				buttons["drop"].click();
 			}
 			break;
 		case TABLE_COUNT:
-			var clicked = labels["hold"].clicked;
-			labels["hold"].enable();
-			labels["hold"].clicked = clicked;
-			clicked = labels["drop"].clicked;
-			labels["drop"].enable();
-			labels["drop"].clicked = clicked;
-			labels["hold"].disableUndo();
-			labels["drop"].disableUndo();
+			buttons["hold"].enable();
+			buttons["drop"].enable();
+			buttons["hold"].disableUndo();
+			buttons["drop"].disableUndo();
 			break;
 	}
 	gameState = state;
@@ -554,7 +688,14 @@ function disableSound() {
 
 {
 function isTableOwner() {
-	return theTable && theTable.players.length > 0 && theTable.players[0].id === socket.id;
+	console.log("OWNER?");
+	console.log(theTable);
+	if (theTable) {
+		console.log(theTable.players.length);
+		console.log(theTable.players[0].socketId);
+		console.log(socket.id);
+	}
+	return theTable && theTable.players.length > 0 && theTable.players[0].socketId === socket.id;
 }
 
 function doDeal() {
@@ -564,14 +705,14 @@ function doDeal() {
 function doHold() {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	// TODO: implement exclusive button set?
-	labels["drop"].clicked = false;
-	labels["auto box"].clicked = false;
+	buttons["drop"].clicked = false;
+	buttons["auto box"].clicked = false;
 	doMove(true, true);
 }
 
 function doDrop() {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	labels["hold"].clicked = false;
+	buttons["hold"].clicked = false;
 	doMove(true, false);
 }
 
@@ -595,7 +736,7 @@ function makeTable() {
 	var name = getPlayerNameInput()
 	// TODO: make settings and send them here.
 	if (name) {
-		socket.emit("make table", name);
+		socket.emit("make table", name, newTableSettings);
 	} else {
 		raiseError("Must provide name to make table!");
 	}
@@ -623,15 +764,20 @@ function updateTable(table) {
 				break;
 			}
 		}
-		if (!theTable || theTable.state != table.state) {
+		var change = !theTable || theTable.state != table.state;
+		theTable = table;
+		if (change) {
 			changeState(table.state);
 		}
 		labels["message"].text = table.message;
 		labels["table"].text = `Table ${table.code}`;
-		labels["pot"].data = table.pot;
-		labels["token goal"].data = table.settings.tokenGoal;
-		theTable = table;
-
+		var potVal = table.state === TABLE_LOBBY ? table.settings.startPot : table.pot;
+		labels["pot value"].text = (potVal > 0 && potVal < 1) ? "₵ " + (potVal * 100) : "$ " + potVal;
+		labels["token goal num"].text = table.settings.tokenGoal;
+		buttons["crazy box"].clicked = table.settings.crazy;
+		buttons["straights box"].clicked = table.settings.straights;
+		buttons["5ofk box"].clicked = table.settings.five_of_a_kind;
+		buttons["QAKAJ box"].clicked = table.settings.qakaj;
 	} else {
 		theTable = undefined;
 		changeState(MAIN_MENU);

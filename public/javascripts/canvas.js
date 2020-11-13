@@ -1,18 +1,20 @@
 // This file manages the game's logic for most visual things and contains various functions
 // for drawing on and manipulating the canvas, used by the game client.
 
-
 //////////  Canvas  \\\\\\\\\\
 function init() {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	canvas = document.getElementById("game-canvas");
 	ctx = canvas.getContext("2d");
-	handleResize();
 
-	console.log("Loaded hand successfully");
+	document.body.style.backgroundColor = BACKGROUND_COLOR;
+
+	initInputs();
 	initCards();
 	initLabels();
+
 	changeState(INIT);
+	handleResize();
 }
 
 function animate() {
@@ -22,17 +24,17 @@ function animate() {
 
 //////////  Events  \\\\\\\\\\
 function handleMouseMove(event) {
-	for (var l in labels) {
-		if (isOnButton(event, labels[l])) {
+	for (var button of Object.values(buttons)) {
+		if (isOnButton(event, button)) {
 			if (!clickCursor) {
 				$("#game-canvas").css("cursor", "pointer");
 				clickCursor = true;
 			}
-			labels[l].focus = true;
+			button.focus = true;
 			return;
 		} else {
-			labels[l].down = false;
-			labels[l].focus = false;
+			button.down = false;
+			button.focus = false;
 		}
 	}
 
@@ -42,9 +44,9 @@ function handleMouseMove(event) {
 
 function handleMouseDown(event) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	for (var l in labels) {
-		if (isOnButton(event, labels[l])) {
-			labels[l].down = true;
+	for (var button of Object.values(buttons)) {
+		if (isOnButton(event, button)) {
+			button.down = true;
 			return;
 		}
 	}
@@ -52,11 +54,11 @@ function handleMouseDown(event) {
 
 function handleMouseUp(event) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	for (var l in labels) {
-		if (labels[l].down) {
-			labels[l].toggle();
+	for (var button of Object.values(buttons)) {
+		if (button.down) {
+			button.toggle();
 		}
-		labels[l].down = false;
+		button.down = false;
 	}
 	handleMouseMove(event);
 }
@@ -66,28 +68,28 @@ function handleKeyDown(event) {
 	switch (event.keyCode) {
 		case 13:	// enter
 			if (SHIFTED) {
-				labels["make table"].click();
+				buttons["make table"].click();
 			} else {
-				labels["join table"].click();
+				buttons["join table"].click();
 			}
 		case 38:    // up arrow
-			labels["deal"].click();
+			buttons["deal"].click();
 			break;
 		case 40:    // down arrow
-			labels["drop"].unclick();
-			labels["hold"].unclick();
+			buttons["drop"].unclick();
+			buttons["hold"].unclick();
 			break;
 		case 39:    // ->
-			labels["drop"].click();
+			buttons["drop"].click();
 			break;
 		case 37:	// <-
-			labels["hold"].click();
+			buttons["hold"].click();
 			break;
 		case 16:    // shift
 			SHIFTED = true;
 			break;
 		case 27: 	// esc
-			labels["leave table"].click();
+			buttons["leave table"].click();
 			break;
 	}
 	// console.log("Key press: " + event.keyCode);
@@ -111,23 +113,11 @@ function getGameCodeInput() {
 	return code ? code : false;
 }
 
-function isOnSlot(event, slot) {
+function isOnButton(event, button) {
 	var x = (event.pageX - canvas.offsetLeft),
 		y = (event.pageY - canvas.offsetTop);
-	if (slot.card && canPlayCard) {
-		if (x > slot.position.x && x < slot.position.x + cardWidth &&
-			y > slot.position.y && y < slot.position.y + cardHeight) {
-			return true;
-		}
-	}
-	return false;
-}
-
-function isOnButton(event, label) {
-	var x = (event.pageX - canvas.offsetLeft),
-		y = (event.pageY - canvas.offsetTop);
-	if (label.enabled) {
-		buttonDims = label.buttonDims();
+	if (button.enabled) {
+		buttonDims = button.buttonDims();
 		return x >= buttonDims.left && x <= buttonDims.right && y <= buttonDims.bot && y >= buttonDims.top;
 	}
 	return false;
@@ -136,12 +126,12 @@ function isOnButton(event, label) {
 function handleResize() {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	if (window.innerWidth < window.innerHeight * aspect) {
-		canvas.width = window.innerWidth * 0.9;
-		canvas.height = window.innerWidth * 0.9 / aspect;
+		canvas.width = window.innerWidth;
+		canvas.height = window.innerWidth/ aspect;
 		r = canvas.width / 1000;
 	} else {
-		canvas.width = window.innerHeight * 0.9 * aspect;
-		canvas.height = window.innerHeight * 0.9;
+		canvas.width = window.innerHeight * aspect;
+		canvas.height = window.innerHeight;
  		r = canvas.height * aspect / 1000;
 	}
 	// Resize input boxes
@@ -163,49 +153,40 @@ function handleResize() {
 //////////  Drawing  \\\\\\\\\\
 
 function draw() {
-	drawRect("#eeeeee", 0, 0, 1, 1);
-	labels["version"].draw();
-	labels["sound"].draw();
+	drawRect(BACKGROUND_COLOR, 0, 0, 1, 1);
+
 	switch (gameState) {
 		case INIT:
 			break;
 		case MAIN_MENU:
-			labels["title_3"].draw();
-			labels["title_5"].draw();
-			labels["title_7"].draw();
-			labels["make table"].draw();
-			labels["join table"].draw();
+			drawGroups["main menu"].draw();
 			break;
 		case TABLE_LOBBY:
 			drawTable();
-			labels["leave table"].draw();
 			if (theTable.players.length > 1 && !thePlayer.moved) {
-				labels["deal"].enable();
-				labels["deal"].draw();
-				if (labels["auto box"].clicked) {
-					labels["deal"].toggle();
+				buttons["deal"].enable();
+				if (buttons["auto box"].clicked) {
+					buttons["deal"].toggle();
 				}
+			} else {
+				buttons["deal"].disable();
+			}
+			if (isTableOwner()) {
+				buttonGroups["settings"].enable();
 			}
 			break;
 		case TABLE_GAME:
 			drawTable();
-			if (!thePlayer.moved) {
-				labels["deal"].draw();
-			}
+			thePlayer.moved ? buttons["deal"].disable() : buttons["deal"].enable();
 			break;
 		case TABLE_ROUND:
 			drawTable();
-			labels["drop"].draw();
-			labels["hold"].draw();
-
 			break;
 		case TABLE_COUNT:
 			drawTable();
-			labels["drop"].draw();
-			labels["hold"].draw();
 			break;
 	}
-	labels["error msg"].draw();
+	drawGroups["bottom bar"].draw();
 }
 
 function drawTable() {
@@ -213,23 +194,17 @@ function drawTable() {
 	if (!theTable) {
 		return;
 	}
-	labels["table"].draw();
 
 	// Draw settings
 	drawRect("#bbbbbb", 0.05, 0.35, 0.2, 0.3);
-	labels["pot"].draw();
-	labels["token goal"].draw();
-6
+	drawGroups["settings"].draw();
+
 	// Draw Message area
 	drawRect("#999999", 0.25, 0.35, 0.5, 0.3);
-	labels["message"].draw();
-	if (gameState !== TABLE_LOBBY) {
-		labels["hand message"].draw();
-	}
+	labels["hand message"].visible = gameState !== TABLE_LOBBY;
+	drawGroups["messages"].draw();
 	if (gameState === TABLE_GAME && thePlayer && thePlayer.held) {
 		var numRow = Math.max(4, Object.keys(hands).length - 1);
-		console.log("WRITING HANDS");
-		console.log(numRow);
 		var i = 0;
 		for (var name in hands) {
 			if (name === thePlayer.name) {
@@ -273,9 +248,7 @@ function drawTable() {
 		}
 		drawPlayerPad(player,x, y, w, h);
 	}
-
-	labels["auto"].draw();
-	labels["auto box"].draw();
+	drawGroups["player pad"].draw();
 }
 
 function drawRect(color, x, y, w, h) {
@@ -321,7 +294,7 @@ function drawPlayerPad(player, x, y, width, height) {
 	var labelMargin = 5;
 
 	// Draw name with "ready" light. Adjust size to fit in name box, and then scoot down.
-	var name = new Label({x: absX + labelMargin, y: absY}, player.active ? player.name : `<<< ${player.name} >>>`, 30, "left");
+	var name = new Label({x: absX + labelMargin, y: absY}, player.active ? player.name : `< ${player.name} >`, 30, "left");
 	scaleLabelsToWidth([name], nameW, labelMargin);
 	var readyMargin = 10 * r;
 	var radius = name.dims().height / 2;	
@@ -439,6 +412,26 @@ function sound(src) {
 }
 
 //////////  Initialize  \\\\\\\\\\
+
+function initInputs() {
+	var container = document.getElementById("content");
+	var input = document.createElement("input");
+	input.id = "player-name";
+	input.type = "text";
+	input.maxLength = 16;
+	input.placeholder = "Player Name";
+	input.style.display = "none";
+	container.appendChild(input);
+	input = document.createElement("input");
+	input.id = "game-code";
+	input.type = "text";
+	input.maxLength = 4;
+	input.placeholder = "CODE";
+	input.style.textTransform = "uppercase";
+	input.style.display = "none";
+	container.appendChild(input);
+}
+
 window.requestAnimFrame = (function () {
 	return window.requestAnimationFrame ||
 		   window.webkitRequestAnimationFrame ||
@@ -454,6 +447,7 @@ var hand, canvas, ctx;
 var clickCursor = false,
 	aspect = 16 / 10,
 	ERROR_DURATION_SEC = 2.5,
+	BACKGROUND_COLOR = "#eeeeee",
 	LABEL_FONT = "Tahoma",
 	FELT_COLOR = "#35654d",
 	LEDGER_COLOR = "#FDFD96",

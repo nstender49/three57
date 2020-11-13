@@ -35,8 +35,7 @@ module.exports.listen = function(app) {
 			socket.emit("server error", "No cookie!");
 			return false;
 		}
-		console.log(`DEBUG ${DEBUG}`);
-		socket.emit("set debug", DEBUG);
+		socket.emit("init settings", DEBUG);
 
 		handleNewConnection(socket);
 
@@ -44,8 +43,8 @@ module.exports.listen = function(app) {
 			playerDisconnected(socket);
 		});
 
-		socket.on("make table", function(name) {
-			var code = createTable(socket, name);
+		socket.on("make table", function(name, settings) {
+			var code = createTable(settings);
 			joinTable(socket, code, name);
 		});
 
@@ -60,6 +59,10 @@ module.exports.listen = function(app) {
 		socket.on("do move", function(moved, held) {
 			processMove(socket, moved, held);
 		});
+
+		socket.on("update settings", function(settings) {
+			updateSettings(socket, settings);
+		});
 	});
 	return io;
 };
@@ -68,7 +71,7 @@ module.exports.listen = function(app) {
 
 ///// Lobby \\\\\
 
-function createTable() {
+function createTable(settings) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	var table = {
 		code: createTableCode(),
@@ -76,25 +79,26 @@ function createTable() {
 		pot: 0,
 		state: TABLE_LOBBY,
 		message: "Waiting for players to join...",
-		settings: {
-			tokenGoal: 5,
-			startPot: 1,
-			roundInc: 2,
-			roundMin: 3,
-			roundMax: 7,
-			wilds: [],
-			qakaj: true,
-			five_of_a_kind: true,
-			advanceSec: DEBUG ? 1 : 3,
-		},
+		settings: settings,
 		ledger: [],
 	};
 	tables.push(table);
 	return table.code;
 }
 
+function updateSettings(socket, settings) {
+	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
+	var table = getTableBySocketId(socket.id);
+	if (!table) { return false; }
+	if (isTableOwner(socket.id, table)) {
+		table.settings = settings;
+		updateTable(table);
+	} else {
+		socket.emit("server error", "Only owner can modify table settings!");
+	}
+}
+
 function joinTable(socket, code, name) {
-	console.log(`JOIN TABLE ${socket.id} ${code} ${name}`);
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	var player = getPlayerBySocketId(socket.id);
 
@@ -314,6 +318,9 @@ function handleNewGame(table) {
 		game = {};
 		games.push(game);
 	}
+	table.settings.roundMin = table.settings.straights ? 2 : 3;
+	table.settings.roundMax = 7;
+	table.settings.roundInc = table.settings.straights ? 1 : 2;
 	game.tableCode = table.code,
 	// NOTE: we deal a round immediately after making a game, so this rolls over to next round.
 	table.round = table.settings.roundMax;
@@ -335,7 +342,10 @@ function handleNewRound(table) {
 	if (table.round > table.settings.roundMax) {
 		table.round = table.settings.roundMin;
 	}
-	table.settings.wilds = [table.round.toString()];
+	if (table.round === table.settings.roundMin || !table.settings.crazy) {
+		table.settings.wilds = [];
+	}
+	table.settings.wilds.push(table.round.toString());
 	dealRound(table, game);
 	table.message = "Choose to Hold or Drop";
 }
@@ -520,7 +530,7 @@ function getTablePlayerBySessionId(sessionId, table) {
 
 function isTableOwner(playerId, table) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	return table && table.players && table.players.length > 0 && table.players[0].id === playerId;
+	return table && table.players && table.players.length > 0 && table.players[0].socketId === playerId;
 }
 
 function handleNewConnection(socket, sessionId) {
