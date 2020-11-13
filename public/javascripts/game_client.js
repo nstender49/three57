@@ -196,16 +196,18 @@ class Button {
 		}
 	}
 
-	enable() {
+	enable(preserveClick) {
 		this.visible = true;
 		this.enabled = true;
+		if (!preserveClick) {
+			this.clicked = false;
+		}
+		this.undoEnabled = true;
 	}
 
 	disable() {
 		this.visible = false;
 		this.enabled = false;
-		this.clicked = false;
-		this.undoEnabled = true;
 	}
 
 	disableUndo() {
@@ -701,8 +703,8 @@ function changeState(state) {
 			}
 			break;
 		case TABLE_COUNT:
-			buttons["hold"].enable();
-			buttons["drop"].enable();
+			buttons["hold"].enable(true);
+			buttons["drop"].enable(true);
 			buttons["hold"].disableUndo();
 			buttons["drop"].disableUndo();
 			break;
