@@ -8,6 +8,7 @@ TABLE_LOBBY = "table lobby";
 TABLE_GAME = "table game";
 TABLE_ROUND = "table round";
 TABLE_COUNT = "table count";
+DEBUG = false;
 
 var socket = io();
 var gameState = undefined;
@@ -33,6 +34,9 @@ socket.on("update hand", function(id, hand, clear) {
 	if (clear) {
 		hands = [];
 	}
+	if (id === thePlayer.sessionId) {
+		labels["hand message"].text = hand.text;
+	}
 	hands[id] = hand;
 });
 
@@ -42,6 +46,11 @@ socket.on("play countdown", function() {
 
 socket.on("server error", function(msg) {
 	raiseError(msg);
+});
+
+socket.on("set debug", function(debug) {
+	DEBUG = debug;
+	handleResize();
 });
 
 ///// Client-server events \\\\\
@@ -238,6 +247,53 @@ class Button {
 	}
 }
 
+class ImageLabel {
+	constructor(position, width, height, src) {
+		this.position = position;
+		console.log(`MAKING IMAGE: ${width} ${height} ${src}`);
+		this.width = width;
+		this.height = height;
+		this.img = new Image;
+		this.img.src = src;
+		this.ratio = this.img.width / this.img.height;
+	}
+
+	disable() {}
+
+	dims() {
+		return {
+			width: canvas.width * this.width,
+			height: canvas.height * this.height,
+		}
+	}
+
+	buttonDims() {
+		var dims = this.dims();
+
+		var minX = canvas.width * this.position.x;
+		var minY = canvas.height * this.position.y;
+		var maxX = minX + dims.width;
+		var maxY = minY + dims.height;
+		
+		return {
+			left: minX,
+			right: maxX,
+			top: minY,
+			bot: maxY,
+			width: dims.width,
+			height: dims.height,
+		}
+	}
+
+	draw() {
+		var h = canvas.height * this.height;
+		var w = this.width ? canvas.width * this.width : h * (this.img.width / this.img.height);
+		var x = canvas.width * this.position.x - w / 2;
+		var y = canvas.height * this.position.y;
+		ctx.drawImage(this.img, x, y, w, h);
+	}
+}
+
 class ImageButton {
 	constructor(position, width, height, on_src, callback, off_src, uncallback) {
 		this.position = position;
@@ -320,9 +376,12 @@ class ImageButton {
 ///// Game state \\\\\
 
 function initLabels() {
+	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	labels["error msg"] = new Label({x: 0.5, y: 0.97}, "", 20);
 	// Main menu
-	labels["title"] = new Label({x: 0.5, y: 0.4}, "3-5-7", 200);
+	labels["title_3"] = new ImageLabel({x: 0.35, y: 0.15}, false, 0.3, `/images/cards/${CARD_SETS[0]}/3S.png`);
+	labels["title_5"] = new ImageLabel({x: 0.5, y: 0.15}, false, 0.3, `/images/cards/${CARD_SETS[0]}/5S.png`);
+	labels["title_7"] = new ImageLabel({x: 0.65, y: 0.15}, false, 0.3, `/images/cards/${CARD_SETS[0]}/7S.png`);
 	labels["make table"] = new Button({x: 0.5, y: 0.6},  "Make Table", 80, makeTable);
 	labels["join table"] = new Button({x: 0.5, y: 0.85}, " Join Table ", 80, joinTable);
 	// Table
@@ -336,6 +395,7 @@ function initLabels() {
 	labels["pot"] = new Label({x: 0.15, y: 0.4}, "Pot: $", 30);
 	labels["token goal"] = new Label({x: 0.06, y: 0.45}, "Token Goal: ", 20, "left");
 	labels["message"] = new Label({x: 0.5, y: 0.4}, "", 30);
+	labels["hand message"] = new Label({x: 0.5, y: 0.6}, "Hand Message", 20);
 	labels["deal"] = new Button({x: 0.2, y: 0.8}, "Deal", 30, doDeal, undefined, false);
 
 	labels["sound"] = new ImageButton({x: 0.91, y: 0.97}, 0.02, 0.025, "/images/sound_off.png", disableSound, "/images/sound_on.png", enableSound);
@@ -404,8 +464,7 @@ function disableSound() {
 
 ///// Game logic \\\\\
 
-
-
+{
 function isTableOwner() {
 	return theTable && theTable.players.length > 0 && theTable.players[0].id === socket.id;
 }
@@ -441,9 +500,11 @@ function updateHand(playerId, hand) {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	hands[playerId] = hand;
 }
+}
 
 ///// Client-server functions \\\\\
 
+{
 function makeTable() {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	var name = getPlayerNameInput()
@@ -476,9 +537,6 @@ function updateTable(table) {
 				found = true;
 				break;
 			}
-		}
-		if (!found) {
-			console.log("DID NOT FIND PLAYER WITH MY SOCKET ID!!! " + socket.id);
 		}
 		if (!theTable || theTable.state != table.state) {
 			changeState(table.state);
@@ -525,4 +583,5 @@ function fadeLabel(label, start) {
 	} else {
 		labels[label].visible = false;
 	}
+}
 }

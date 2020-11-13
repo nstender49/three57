@@ -1,124 +1,80 @@
+const e = require("express");
+
 var WIN = "win";
 var TIE = "tie";
 var LOSE = "lose";
 
-module.exports.getWinner = function(players, settings) {
-    var winners = []
-    var bestResult = undefined;
+module.exports.getWinner = function(players) {
+    var winners = [];
+    var best = undefined;
     for (var player of players) {
-        var result = getBestHand(player.hand, settings);
-        var compare = compareResults(result, bestResult);
+        var compare = compareResults(player.hand.cards, best);
         if (compare === WIN) {
             winners = [player.sessionId];
-            bestResult = result;
+            best = player.hand.value;
         } else if (compare === TIE) {
             winners.push(player.sessionId);
         }
     }
-    return {
-        winners: winners,
-        bestHand: handToString(bestResult),
-    }
-    // testHands(settings);
+    return winners;
 }
 
-{
-function testHands(settings) {
-    TEST_HANDS = [
-        "3H,KS,2H",              // pair w/ wild
-        "2C,4C,5C",              // high card
-        "AH,KH,QH,3D,10H",       // royal flush w/ wild
-        "AH,KH,QH,3D,10C",       // A high straight w/ wild
-        "AC,KH,10S,9H,8D,3D,7S", // J high straight w/ wild
-        "2D,2H,6C,6D,3H",         // full house 6 over 2 w/ wild\
-        "AH,AD,QS,KS,JD",         // QAKAJ
-        "AH,AD,QS,3D,JD",         // Failed QAKAJ, no wilds! trip aces
-        "5H,5D,3C,6S,5S,3H,AC",   // 5 of a kind, 5s
-        "5H,4H,2H,3D,AH,6C",      // straight flush, 5 high, hearts
-        "4C,3C,2H,AD,5S",         // straight 5 high, natural (wild doesn't matter)
-        "5H,8H,KH,5D,QH,6H,7H",   // flush K high
-        "5H,8H,3S,5D,QH,2H,JH",   // flush w/ wild, "A" high
-        "7H,4C,4S,7S,2D",         // two pair 7 over 4 natural
-        "AH,KH,QH,6S,6D",         // pair 6's, A kicker natural
-        "AH,KH,QH,6S,3D",         // pair A's, K kicker w/ wild
-        "KD,3D,3H,3C,3S,QS,QC",   // 5 of a kind, K
-        "3D,3H,3C,3S,3D",         // 5 of a kind, all wilds
-        "3D,3H,3C",               // 3 of a kind, all wilds
-    ];
-
-    for (var hand of TEST_HANDS) {
-        var result = getBestHand(convertStringHand(hand), settings);
-        console.log(result);
-    }
-}
-
-function convertStringHand(h) {
-    hand = [];
-    for (var card of h.split(",")) {
-        hand.push({value: card.slice(0, card.length - 1), suit: card.slice(card.length - 1)});
-    }
-    return hand;
-}
-}
-
-function compareResults(result, bestResult) {
+function compareResults(hand, best) {
     if (!bestResult) {
         return WIN;
     }
     // Compare ranks
-    if (HAND_RANKINGS[result.hand] != HAND_RANKINGS[bestResult.hand]) {
-        return HAND_RANKINGS[result.hand] < HAND_RANKINGS[bestResult.hand] ? WIN : LOSE;
+    if (HAND_RANKINGS[hand.rank] != HAND_RANKINGS[best.rank]) {
+        return HAND_RANKINGS[hand.rank] < HAND_RANKINGS[best.rank] ? WIN : LOSE;
     }
+    return compareValues(hand, best);
+}
+
+function compareValues(vals1, vals2) {
+    if (!vals2) { return WIN; }
     // Compare value
-    if (result.value != bestResult.value) {
-        return lt(bestResult.value, result.value) ? WIN : LOSE;
-    }
-    // Compare kickers
-    if (!result.kickers) {
-        return TIE;
-    }
-    for (var i = 0; i < result.kickers.length; ++i) {
-        if (result.kickers[i] != bestResult.kickers[i]) {
-            return lt(bestResult.kickers[i], result.kickers[i]) ? WIN : LOSE;
+    for (var i = 0; i < vals1.length; ++i) {
+        if (vals1[i] != vals2[i]) {
+            return lt(vals1[i], vals2[i]) ? LOSE : WIN;
         }
     }
     return TIE;
 }
 
-function handToString(result) {
-    switch(result.hand) {
+module.exports.handToString = function(hand) {
+    switch(hand.rank) {
         case QAKAJ:
             return "QuAKAJack";
         case FIVE_OF_A_KIND:
-            return "5-of-a-Kind " + result.value + "s";            
+            return "5-of-a-Kind " + hand.values[0] + "s";            
         case ROYAL_FLUSH:
             return "Royal Flush";
         case STRAIGHT_FLUSH:
-            return result.value + " high Straight Flush";
+            return hand.values[0] + " High Straight Flush";
         case FOUR_OF_A_KIND:
-            return "4-of-a-Kind " + result.value + "s, kicker: " + result.kickers[0]; 
+            return "4-of-a-Kind " + hand.values[0] + "s - Kicker: " + hand.values[1]; 
         case FULL_HOUSE:
-            return "Full House " + result.value + "s over " + result.kickers[0] + "s";
+            return "Full House " + hand.values[0] + "s over " + hand.values[1] + "s";
         case FLUSH:
-            return result.value + " high Flush";
+            return "Flush " + hand.values.join("-");
         case STRAIGHT:
-            return result.value + " high Straight";
+            return hand.values[0] + " High Straight";
         case THREE_OF_A_KIND:
-            var s = "3-of-a-Kind " + result.value + "s";
-            if (result.kickers && result.kickers.length > 0) {
-                s += ", kickers: " + result.kickers.join(", ");
+            var s = "3-of-a-Kind " + hand.values[0] + "s";
+            if (hand.values.length > 1) {
+                s += "- Kickers: " + hand.values.slice(1).join("-");
             }
             return s;
         case TWO_PAIR:
-            return "Two Pair " + result.value + "s over " + result.kickers[0] + "s, kicker: " + result.kickers[1];
+            return "Two Pair " + hand.values[0] + "s over " + hand.values[1] + "s - Kicker: " + hand.kickers[1];
         case ONE_PAIR:
-            var s = "Pair of " + result.value + "s";
-            if (result.kickers && result.kickers.length > 0) {
-                s += ", kickers: " + result.kickers.join(", ");
+            var s = "Pair of " + hand.values[0] + "s";
+            if (hand.values.length > 1) {
+                s += " - Kickers: " + hand.values.slice(1).join("-");
             }
             return s;
         case HIGH_CARD:
-            return "High Card: " + [result.value].concat(result.kickers).join("-");
+            return "High Card: " + hand.values.join("-");
     }            
 }
 
@@ -157,7 +113,7 @@ var HAND_RANKINGS = {
     HIGH_CARD: 12,
 }
 
-function getBestHand(hand, settings) {
+module.exports.getHandValue = function(hand, settings) { 
     var suits = {};
     var values = {};
     var wildCount = 0;
@@ -165,7 +121,6 @@ function getBestHand(hand, settings) {
 
     // Count suits and values.
     for (var card of hand) {
-        console.log("CARD: " + card.value + " " + card.suit);
         if (settings.wilds.indexOf(card.value) != -1) {
             wildCount += 1;
             continue;
@@ -178,7 +133,7 @@ function getBestHand(hand, settings) {
     
     // QAKAJ
     if (settings.qakaj && hasQAKAJ(values)) {
-        return {hand: QAKAJ}
+        return {rank: QAKAJ}
     }
 
     // Get card with highest count and value.
@@ -187,7 +142,7 @@ function getBestHand(hand, settings) {
     if (hand.length >= 5) {
         // FIVE_OF_A_KIND
         if (settings.five_of_a_kind && countResult.count + wildCount >= 5) {
-            return {hand: FIVE_OF_A_KIND, value: getHighCard(values, [], 5 - wildCount)}
+            return {rank: FIVE_OF_A_KIND, values: [getHighCard(values, [], 5 - wildCount)]}
         }
 
         // ROYAL FLUSH / STRAIGHT FLUSH
@@ -197,9 +152,9 @@ function getBestHand(hand, settings) {
             var sfResult = checkStraightFlush(hand, values, suits, wildCount);
             if (sfResult.result) {
                 if (sfResult.value === "A") {
-                    return {hand: ROYAL_FLUSH}
+                    return {rank: ROYAL_FLUSH}
                 } else {
-                    return {hand: STRAIGHT_FLUSH, value: sfResult.value}
+                    return {rank: STRAIGHT_FLUSH, values: [sfResult.value]}
                 }
             }
         }
@@ -207,32 +162,32 @@ function getBestHand(hand, settings) {
         // FOUR_OF_A_KIND
         if (countResult.count + wildCount >= 4) {
             var quad = getHighCard(values, [], 4 - wildCount)
-            return {hand: FOUR_OF_A_KIND, value: quad, kickers: [getHighCard(values, [quad])]}
+            return {rank: FOUR_OF_A_KIND, values: [quad, getHighCard(values, [quad])]};
         }
 
         // FULL HOUSE
         if (countResult.count + wildCount >= 3) {
             fhResult = checkFullHouse(values, wildCount);
             if (fhResult.result) {
-                return {hand: FULL_HOUSE, value: fhResult.trip, kickers: [fhResult.pair]}
+                return {rank: FULL_HOUSE, values: [fhResult.trip, fhResult.pair]};
             }
         }
 
         // FLUSH
         if (flushResult.result) {
-            return {hand: FLUSH, value: flushResult.value};
+            return {rank: FLUSH, values: flushResult.result};
         }
 
         // STRAIGHT
         if (straightResult.result) {
-            return {hand: STRAIGHT, value: straightResult.value};
+            return {rank: STRAIGHT, values: [straightResult.value]};
         }
     }
 
     // THREE_OF_A_KIND
     if (countResult.count + wildCount >= 3) {
         var trip = getHighCard(values, [], 3 - wildCount)
-        return {hand: THREE_OF_A_KIND, value: trip, kickers: getKickers(values, handSize - 3, [trip])};
+        return {rank: THREE_OF_A_KIND, values: [trip].concat(getKickers(values, handSize - 3, [trip]))};
     }
 
     // PAIRS
@@ -240,27 +195,29 @@ function getBestHand(hand, settings) {
         // If we had two wilds, we'd have at least trips, so we must have max 1 wild.
         if (wildCount === 1) {
             // If we had a natural pair, we'd have trips, so best we can do is one pair.
-            return {hand: ONE_PAIR, value: countResult.value, kickers: getKickers(values, handSize - 2, [countResult.value])};
+            return {rank: ONE_PAIR, values: [countResult.value].concat(getKickers(values, handSize - 2, [countResult.value]))};
         }
         // See if we have a second natural pair.
         secondVal = getHighCard(values, [countResult.value], 2);
         if (secondVal) {
-            return {hand: TWO_PAIR, value: countResult.value, kickers: [secondVal].concat(getKickers(values, handSize - 4, [countResult.value, secondVal]))};
+            return {rank: TWO_PAIR, values: [countResult.value, secondVal].concat(getKickers(values, handSize - 4, [countResult.value, secondVal]))};
         }
         // ONE_PAIR
-        return {hand: ONE_PAIR, value: countResult.value, kickers: getKickers(values, handSize - 2, [countResult.value])};
+        return {rank: ONE_PAIR, values: [countResult.value].concat(getKickers(values, handSize - 2, [countResult.value]))};
     }
     
     // HIGH CARD
-    ranked = getKickers(values, handSize, []);
-    return {hand: HIGH_CARD, value: ranked.splice(0, 1)[0], kickers: ranked.splice(0)};
+    return {rank: HIGH_CARD, values: getKickers(values, handSize, [])};
 }
 
 function getKickers(values, numKickers, excludeValues) {
     var kickers = []
     while (kickers.length < numKickers) {
         var kicker = getHighCard(values, excludeValues);
-        kickers.push(kicker);
+        var toAdd = Math.min(values[kicker], numKickers - kickers.length);
+        for (var i = 0; i < toAdd; i++) {
+            kickers.push(kicker);
+        }
         excludeValues.push(kicker);
     }
     return kickers;
@@ -298,24 +255,39 @@ function getLargestSet(values) {
 }
 
 function checkFlush(suits, wildCount, hand) {
-    maxValue = undefined;
+    var best = undefined;
     for (var suit in suits) {
         if (suits[suit] + wildCount >= 5) {
-            if (wildCount > 0) {
-                return {result: true, value: "A"}
+            var values = getFlushCards(hand, suit, wildCount);
+            if (compareValues(values, best) === WIN) {
+                best = values;
             }
-            for (var card of hand) {
-                if (card.suit === suit && (!maxValue || lt(maxValue, card.value))) {
-                    maxValue = card.value;
-                    if (maxValue === "A") {
-                        return {result: true, value: "A"};
-                    }
-                }
-            }
-            return {result: true, value: maxValue};
         }
     }
-    return {result: false};
+    return {result: best};
+}
+
+
+function getFlushCards(hand, suit, wildCount) {
+    var values = [];
+    for (var val of ORDER) {
+        var found = false;
+        for (var card of hand) {
+            if (card.suit === suit && card.value === val) {
+                values.push(card.value);
+                found = true;
+                break;
+            }
+        }
+        if (!found && wildCount > 0) {
+            values.push(val);
+            wildCount--;
+        }
+        if (values.length === 5) {
+            return values;
+        }
+    }
+    return false;
 }
 
 function checkStraight(values, wildCount) {

@@ -1,11 +1,11 @@
 // This file handles all socket.io connections and manages the serverside game logic.
-var DEBUG = false;
-//var DEBUG = true;
+var ENV = process.env.NODE_ENV || "dev";
+var DEBUG = ENV === "dev";
 
 var socketio = require("socket.io");
 var cookie = require("cookie");
 
-var getWinner = require("./hand_comparison").getWinner;
+var handComparison = require("./hand_comparison");
 
 var players = [];
 var inactive = [];
@@ -15,6 +15,9 @@ var games = [];
 var values = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 var suits = ["C", "D", "H", "S"];
 var playerColors = ["BLUE", "GREEN", "GREY", "PURPLE", "RED", "YELLOW", "BLU", "GREE", "GRE"];
+
+// Delete tables with all inactive players after 1 hour
+var INACTIVE_TABLE_DELETION_SEC = DEBUG ? 1 : 1 * 60 * 60;
 
 TABLE_LOBBY = "table lobby";
 TABLE_GAME = "table game";
@@ -32,7 +35,9 @@ module.exports.listen = function(app) {
 			socket.emit("server error", "No cookie!");
 			return false;
 		}
-		
+		console.log(`DEBUG ${DEBUG}`);
+		socket.emit("set debug", DEBUG);
+
 		handleNewConnection(socket);
 
 		socket.on("disconnect", function() {
@@ -80,7 +85,7 @@ function createTable() {
 			wilds: [],
 			qakaj: true,
 			five_of_a_kind: true,
-			advanceSec: 3,
+			advanceSec: DEBUG ? 1 : 3,
 		},
 		ledger: [],
 	};
@@ -129,7 +134,7 @@ function joinTable(socket, code, name) {
 		color: getAvailableColor(table),
 		held: false,
 		moved: false,
-		inactive: false,
+		active: true,
 	});
 	if (table.state === TABLE_LOBBY && table.players.length > 1) {
 		table.message = "Press Deal to Start!";
@@ -189,22 +194,26 @@ function leaveTable(socket) {
 		}
 	}
 	if (table.players.length === 0) {
-		// Delete game and table.
-		var game = getGameByCode(table.code);
-		if (game) {
-			var index = games.indexOf(game);
-			games.splice(index, 1);
-		}
-		var index = tables.indexOf(table);
-		tables.splice(index, 1);
+		deleteTable(table);
 		table = false;
-
 	} else {
 		table.message = table.players.length === 1 ? "Waiting for other players to join..." : "Press Deal to Start!";
+		// Update remaining players.
+		updateTable(table);
 	}
 	bouncePlayer(socket);
-	// Update remaining players.
-	updateTable(table);
+}
+
+function deleteTable(table) {
+	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
+	// Delete game and table.
+	var game = getGameByCode(table.code);
+	if (game) {
+		var index = games.indexOf(game);
+		games.splice(index, 1);
+	}
+	var index = tables.indexOf(table);
+	tables.splice(index, 1);
 }
 
 ///// client/server \\\\\
@@ -303,24 +312,24 @@ function handleNewGame(table) {
 	}
 	game.tableCode = table.code,
 	// NOTE: we deal a round immediately after making a game, so this rolls over to next round.
-	game.round = table.settings.roundMax;
+	table.round = table.settings.roundMax;
 	table.pot = table.settings.startPot;
 	table.message = "Press Deal to Start!";
 }
 
 function handleNewRound(table) {
 	var game = getGameByCode(table.code);
-	game.round += table.settings.roundInc;
-	if (game.round > table.settings.roundMax) {
-		game.round = table.settings.roundMin;
+	table.round += table.settings.roundInc;
+	if (table.round > table.settings.roundMax) {
+		table.round = table.settings.roundMin;
 	}
-	table.settings.wilds = [game.round.toString()];
+	table.settings.wilds = [table.round.toString()];
 	dealRound(table, game);
 	table.message = "Choose to Hold or Drop";
 }
 
 function doCountdown(table, count) {
-	if (count <= 3) {
+	if (count <= (DEBUG ? 0 : 3)) {
 		table.message += count + "...";
 		setTimeout(doCountdown.bind(null, table, count + 1), 1000);
 	} else {
@@ -416,25 +425,24 @@ function handleToken(table, holderSessionId) {
 
 function handleContest(table, holdingPlayers) {
 	// Compare hands to find winner, and adjust money.
-	var results = getWinner(holdingPlayers, table.settings);
-	var winnerNames = [];
+	var winners = handComparison.getWinner(holdingPlayers);
 	for (var tablePlayer of table.players) {
 		var player = getPlayerBySessionId(tablePlayer.sessionId);
 		if (player.held) {
-			if (results.winners.includes(tablePlayer.sessionId)) {
+			if (winners.includes(tablePlayer.sessionId)) {
 				winnerNames.push(tablePlayer.name);
-				tablePlayer.money += table.pot * (holdingPlayers.length - results.winners.length) / results.winners.length;
+				tablePlayer.money += table.pot * (holdingPlayers.length - winners.length) / winners.length;
 			} else {
 				tablePlayer.money -= table.pot * 2;
 			}
 		}
 	}
-	if (results.winners.length === holdingPlayers.length) {
+	if (winners.length === holdingPlayers.length) {
 		table.message = "It's a draw!";
 	} else {
 		table.message = winnerNames.join(", ") + " won the hand.";
 	}
-	table.pot += table.pot * (holdingPlayers.length - results.winners.length);
+	table.pot += table.pot * (holdingPlayers.length - winners.length);
 }
 
 function generateDeck() {
@@ -444,25 +452,29 @@ function generateDeck() {
 
 function dealRound(table, game) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	if (game.round === table.settings.roundMin) {
+	if (table.round === table.settings.roundMin) {
 		game.deck = generateDeck();
 	}
 	for (var tablePlayer of table.players) {
 		var player = getPlayerBySessionId(tablePlayer.sessionId);
-		if (game.round === table.settings.roundMin) {
-			player.hand = [];
+		if (table.round === table.settings.roundMin) {
+			player.hand = {
+				cards: [],
+			};
 		}
-		deal(player.hand, game.deck, game.round);
+		deal(player.hand, game.deck, table);
 		console.log("SENDING DEALT HAND! with session: " + player.sessionId + " HAND: " + player.hand);
 		player.socket.emit("update hand", player.sessionId, player.hand, true);
 	}
 }
 
-function deal(hand, deck, round) {
+function deal(hand, deck, table) {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
-	while(hand.length < round) {
-		hand.push(drawCard(deck));
+	while(hand.cards.length < table.round) {
+		hand.cards.push(drawCard(deck));
 	}
+	hand.hand = handComparison.getHandValue(hand.cards, table.settings);
+	hand.text = handComparison.handToString(hand.hand);
 }
 
 function drawCard(deck) {
@@ -527,7 +539,7 @@ function handleNewConnection(socket, sessionId) {
 				console.log("PLAYER'S TABLE (" + player.tableCode + ") EXISTS! " + sessionId);
 				var tablePlayer = getTablePlayerBySessionId(sessionId, table);
 				tablePlayer.socketId = socket.id;
-				tablePlayer.inactive = false;
+				tablePlayer.active = true;
 				console.log("SENDING PLAYER HANDS! with session: " + player.sessionId + " HAND: " + player.hand);
 				// Send player their hand, and hands of other players if in the middle of a game.
 				player.socket.emit("update hand", player.sessionId, player.hand, true);
@@ -566,9 +578,19 @@ function playerDisconnected(socket) {
 	var table = getTableBySocketId(socket.id);
 	if (table) {
 		var tablePlayer = getTablePlayerBySessionId(player.sessionId, table);
-		tablePlayer.inactive = true;
-		updateTable(table);
-		// TODO: set timer to remove room if all players are inactive.
+		tablePlayer.active = false;
+		var anyPlayers = false;
+		for (var tP of table.players) {
+			if (tP.active) {
+				anyPlayers = true;
+				break;
+			}
+		}
+		if (anyPlayers) {
+			updateTable(table);
+		} else {
+			setTimeout(deleteTable.bind(null, table), INACTIVE_TABLE_DELETION_SEC * 1000);
+		}
 	}
 	player.socket = undefined;
 	inactive.push(player);

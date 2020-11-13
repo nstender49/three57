@@ -9,8 +9,8 @@ function init() {
 	ctx = canvas.getContext("2d");
 	handleResize();
 
+	initCards(CARD_SETS[0]);
 	initLabels();
-	initCards();
 	changeState(INIT);
 }
 
@@ -169,7 +169,9 @@ function draw() {
 		case INIT:
 			break;
 		case MAIN_MENU:
-			labels["title"].draw();
+			labels["title_3"].draw();
+			labels["title_5"].draw();
+			labels["title_7"].draw();
 			labels["make table"].draw();
 			labels["join table"].draw();
 			break;
@@ -190,11 +192,13 @@ function draw() {
 			drawTable();
 			labels["drop"].draw();
 			labels["hold"].draw();
+			labels["hand message"].draw();
 			break;
 		case TABLE_COUNT:
 			drawTable();
 			labels["drop"].draw();
 			labels["hold"].draw();
+			labels["hand message"].draw();
 			break;
 	}
 	labels["error msg"].draw();
@@ -287,7 +291,7 @@ function drawPlayerPad(player, x, y, width, height) {
 	var labelMargin = 5;
 
 	// Draw name with "ready" light. Adjust size to fit in name box, and then scoot down.
-	var name = new Label({x: absX + labelMargin, y: absY}, player.inactive ? `<<< ${player.name} >>>` : player.name, 30, "left");
+	var name = new Label({x: absX + labelMargin, y: absY}, player.active ? player.name : `<<< ${player.name} >>>`, 30, "left");
 	scaleLabelsToWidth([name], nameW, labelMargin);
 	var readyMargin = 10 * r;
 	var radius = name.dims().height / 2;	
@@ -306,16 +310,8 @@ function drawPlayerPad(player, x, y, width, height) {
 
 	// Draw the hand.
 	if (gameState !== TABLE_LOBBY) {
-		hand = hands[player.sessionId];
-		if (!hand) {
-			hand = makeDownHand(theTable.round, player.color);
-		}
-		drawHand(hand, absX + nameW, absY, cardW, absH);
+		drawHand(absX + nameW, absY, cardW, absH, hands[player.sessionId], theTable.round);
 	}
-}
-
-function drawHands() {
-
 }
 
 function drawLedger() {
@@ -353,16 +349,16 @@ function scaleLabelsToWidth(labels, width, margin) {
 	}
 }
 
-function drawHand(hand, absX, absY, absW, absH) {
+function drawHand(absX, absY, absW, absH, hand, handLen) {
 	var cardHeight = absH * 0.9;
-	var cardWidth = cardHeight / 1.5;
+	var cardWidth = cardHeight / CARD_RATIO;
 	// Gap between cards is either MIN_GAP * cardWidth, or negative to stack cards if there are too many.
 	var minGap = cardWidth * 0.1
-	var gapWidth = Math.min(minGap, (absW - 2 * minGap - hand.length * cardWidth) / (hand.length - 1));
-	for (var i = 0; i < hand.length; i++) {
+	var gapWidth = Math.min(minGap, (absW - 2 * minGap - handLen * cardWidth) / (handLen - 1));
+	for (var i = 0; i < handLen; i++) {
 		drawCard(
-			hand[i],
-			absX + absW / 2 - ((hand.length - 1) / 2 * gapWidth) - (hand.length / 2 * cardWidth) + (cardWidth + gapWidth) * i,
+			hand ? hand.cards[i] : undefined,
+			absX + absW / 2 - ((handLen - 1) / 2 * gapWidth) - (handLen / 2 * cardWidth) + (cardWidth + gapWidth) * i,
 			absY + absH * 0.05,
 			cardWidth,
 			cardHeight,
@@ -372,27 +368,29 @@ function drawHand(hand, absX, absY, absW, absH) {
 
 var VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 var SUITS = ["C", "D", "H", "S"];
-var playerColors = ["BLUE", "GREEN", "GREY", "PURPLE", "RED", "YELLOW", "BLU", "GREE", "GRE"];
+var CARD_BACK = undefined;
 var CARDS = [];
-function initCards() {
+var CARD_SETS = ["bicycle1", "bicycle", "bridge"];
+var CARD_RATIO = 1.4;
+
+
+function initCards(cardSet) {
 	for (var suit of SUITS) {
 		CARDS[suit] = [];
 		for (var value of VALUES) {
 			var img = new Image;
-			img.src = `/images/cards/${value}${suit}.png`;
+			img.src = `/images/cards/${cardSet}/${value}${suit}.png`;
 			CARDS[suit][value] = img;
 		}
 	}
-	for (var color of playerColors) {
-		CARDS[color] = [];
-		var img = new Image;
-		img.src = `/images/cards/B${color}.png`;
-		CARDS[color]["B"] = img;
-	}
+	CARD_RATIO = CARDS["S"]["A"].height / CARDS["S"]["A"].width;
+	var img = new Image;
+	img.src = `/images/cards/${cardSet}/BACK.png`;
+	CARD_BACK = img;
 }
 
 function drawCard(card, x, y, w, h) {
-	ctx.drawImage(CARDS[card.suit][card.value], x, y, w, h);
+	ctx.drawImage(card ? CARDS[card.suit][card.value] : CARD_BACK, x, y, w, h);
 }
 
 function sound(src) {
@@ -450,9 +448,6 @@ var ELEM_CONFIGS = [
 		h: 0.09,
 	},
 ];
-
-// var DEBUG = true;
-var DEBUG = false;
 
 init();
 animate();
