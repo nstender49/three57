@@ -34,9 +34,6 @@ socket.on("update hand", function(id, hand, clear) {
 	if (clear) {
 		hands = [];
 	}
-	if (id === thePlayer.sessionId) {
-		labels["hand message"].text = hand.text;
-	}
 	hands[id] = hand;
 });
 
@@ -250,7 +247,6 @@ class Button {
 class ImageLabel {
 	constructor(position, width, height, src) {
 		this.position = position;
-		console.log(`MAKING IMAGE: ${width} ${height} ${src}`);
 		this.width = width;
 		this.height = height;
 		this.img = new Image;

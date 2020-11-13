@@ -9,6 +9,7 @@ function init() {
 	ctx = canvas.getContext("2d");
 	handleResize();
 
+	console.log("Loaded hand successfully");
 	initCards(CARD_SETS[0]);
 	initLabels();
 	changeState(INIT);
@@ -235,6 +236,7 @@ function drawTable() {
 			var y = 0.65;
 			var w = 0.9;
 			var h = 0.3;
+			labels["hand message"].text = hands[player.sessionId].text;
 		} else {
 			var rowIdx = Math.floor(pos / cols);
 			var colIdx = pos % cols;
