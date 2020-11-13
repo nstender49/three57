@@ -375,9 +375,9 @@ function initLabels() {
 	if (logFull) console.log("%s(%s)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	labels["error msg"] = new Label({x: 0.5, y: 0.97}, "", 20);
 	// Main menu
-	labels["title_3"] = new ImageLabel({x: 0.35, y: 0.15}, false, 0.3, `/images/cards/${CARD_SETS[0]}/3S.png`);
-	labels["title_5"] = new ImageLabel({x: 0.5, y: 0.15}, false, 0.3, `/images/cards/${CARD_SETS[0]}/5S.png`);
-	labels["title_7"] = new ImageLabel({x: 0.65, y: 0.15}, false, 0.3, `/images/cards/${CARD_SETS[0]}/7S.png`);
+	labels["title_3"] = new ImageLabel({x: 0.35, y: 0.15}, false, 0.3, `/images/cards/3S.png`);
+	labels["title_5"] = new ImageLabel({x: 0.5, y: 0.15}, false, 0.3, `/images/cards/5S.png`);
+	labels["title_7"] = new ImageLabel({x: 0.65, y: 0.15}, false, 0.3, `/images/cards/7S.png`);
 	labels["make table"] = new Button({x: 0.5, y: 0.6},  "Make Table", 80, makeTable);
 	labels["join table"] = new Button({x: 0.5, y: 0.85}, " Join Table ", 80, joinTable);
 	// Table

@@ -10,7 +10,7 @@ function init() {
 	handleResize();
 
 	console.log("Loaded hand successfully");
-	initCards(CARD_SETS[0]);
+	initCards();
 	initLabels();
 	changeState(INIT);
 }
@@ -374,22 +374,23 @@ var VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 var SUITS = ["C", "D", "H", "S"];
 var CARD_BACK = undefined;
 var CARDS = [];
-var CARD_SETS = ["bicycle1"];
+// var CARD_SETS = ["bicycle1"];
 var CARD_RATIO = 1.4;
 
 
-function initCards(cardSet) {
+function initCards() {
 	for (var suit of SUITS) {
 		CARDS[suit] = [];
 		for (var value of VALUES) {
 			var img = new Image;
-			img.src = `/images/cards/${cardSet}/${value}${suit}.png`;
+			//img.src = `/images/cards/${cardSet}/${value}${suit}.png`;
+			img.src = `/images/cards/${value}${suit}.png`;
 			CARDS[suit][value] = img;
 		}
 	}
 	CARD_RATIO = CARDS["S"]["A"].height / CARDS["S"]["A"].width;
 	var img = new Image;
-	img.src = `/images/cards/${cardSet}/BACK.png`;
+	img.src = `/images/cards/BACK.png`;
 	CARD_BACK = img;
 }
 
