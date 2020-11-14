@@ -2,7 +2,7 @@ var WIN = "win";
 var TIE = "tie";
 var LOSE = "lose";
 
-module.exports.getWinner = function(players) {
+function getWinner(players) {
     var winners = [];
     var best = undefined;
     for (var player of players) {
@@ -25,7 +25,6 @@ function compareResults(hand, best) {
     if (HAND_RANKINGS[hand.rank] != HAND_RANKINGS[best.rank]) {
         return HAND_RANKINGS[hand.rank] < HAND_RANKINGS[best.rank] ? WIN : LOSE;
     }
-    console.log("COMPARING HANDS " + hand + " " + best + " " + compareValues(hand, best));
     return compareValues(hand.values, best.values);
 }
 
@@ -41,43 +40,42 @@ function compareValues(vals1, vals2) {
     return TIE;
 }
 
-module.exports.handToString = function(hand) {
+function handToString(hand) {
     switch(hand.rank) {
-        case QAKAJ:
+        case RANKS.QAKAJ:
             return "QuAKAJack";
-        case FIVE_OF_A_KIND:
+        case RANKS.FIVE_OF_A_KIND:
             return "5-of-a-Kind " + hand.values[0] + "s";            
-        case ROYAL_FLUSH:
+        case RANKS.ROYAL_FLUSH:
             return "Royal Flush";
-        case STRAIGHT_FLUSH:
+        case RANKS.STRAIGHT_FLUSH:
             return hand.values[0] + " High Straight Flush";
-        case FOUR_OF_A_KIND:
+        case RANKS.FOUR_OF_A_KIND:
             return "4-of-a-Kind " + hand.values[0] + "s - Kicker: " + hand.values[1]; 
-        case FULL_HOUSE:
+        case RANKS.FULL_HOUSE:
             return "Full House " + hand.values[0] + "s over " + hand.values[1] + "s";
-        case FLUSH:
+        case RANKS.FLUSH:
             return "Flush " + hand.values.join("-");
-        case STRAIGHT:
+        case RANKS.STRAIGHT:
             return hand.values[0] + " High Straight";
-        case THREE_OF_A_KIND:
+        case RANKS.THREE_OF_A_KIND:
             var s = "3-of-a-Kind " + hand.values[0] + "s";
             if (hand.values.length > 1) {
                 s += " - Kickers: " + hand.values.slice(1).join("-");
             }
             return s;
-        case TWO_PAIR:
+        case RANKS.TWO_PAIR:
             return "Two Pair " + hand.values[0] + "s over " + hand.values[1] + "s - Kicker: " + hand.values[2];
-        case ONE_PAIR:
+        case RANKS.ONE_PAIR:
             var s = "Pair of " + hand.values[0] + "s";
             if (hand.values.length > 1) {
                 s += " - Kickers: " + hand.values.slice(1).join("-");
             }
             return s;
-        case HIGH_CARD:
+        case RANKS.HIGH_CARD:
             return "High Card: " + hand.values.join("-");
     }            
 }
-
 
 // Card value order.
 var ORDER = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"];
@@ -85,18 +83,20 @@ var STR_ORDER = ORDER.concat(["A"]);
 var SUITS = ["C", "D", "H", "S"];
 
 // Hand names
-var QAKAJ = "QAKAJ";
-var FIVE_OF_A_KIND = "FIVE_OF_A_KIND";
-var ROYAL_FLUSH = "ROYAL_FLUSH";
-var STRAIGHT_FLUSH = "STRAIGHT_FLUSH";
-var FOUR_OF_A_KIND = "FOUR_OF_A_KIND";
-var FULL_HOUSE = "FULL_HOUSE";
-var FLUSH = "FLUSH";
-var STRAIGHT = "STRAIGHT";
-var THREE_OF_A_KIND = "THREE_OF_A_KIND";
-var TWO_PAIR = "TWO_PAIR";
-var ONE_PAIR = "ONE_PAIR";
-var HIGH_CARD = "HIGH_CARD";
+RANKS = {
+    QAKAJ: "QAKAJ",
+    FIVE_OF_A_KIND: "FIVE_OF_A_KIND",
+    ROYAL_FLUSH: "ROYAL_FLUSH",
+    STRAIGHT_FLUSH: "STRAIGHT_FLUSH",
+    FOUR_OF_A_KIND: "FOUR_OF_A_KIND",
+    FULL_HOUSE: "FULL_HOUSE", 
+    FLUSH: "FLUSH",
+    STRAIGHT: "STRAIGHT",
+    THREE_OF_A_KIND: "THREE_OF_A_KIND",
+    TWO_PAIR: "TWO_PAIR",
+    ONE_PAIR: "ONE_PAIR",
+    HIGH_CARD: "HIGH_CARD"
+};
 
 var HAND_RANKINGS = {
     QAKAJ: 1,
@@ -113,7 +113,7 @@ var HAND_RANKINGS = {
     HIGH_CARD: 12,
 }
 
-module.exports.getHandValue = function(hand, settings) { 
+function getHandValue(hand, settings) { 
     var suits = {};
     var values = {};
     var wildCount = 0;
@@ -133,7 +133,7 @@ module.exports.getHandValue = function(hand, settings) {
     
     // QAKAJ
     if (settings.qakaj && hasQAKAJ(values)) {
-        return {rank: QAKAJ}
+        return {rank: RANKS.QAKAJ}
     }
 
     // Get card with highest count and value.
@@ -142,7 +142,7 @@ module.exports.getHandValue = function(hand, settings) {
     if (hand.length >= 5) {
         // FIVE_OF_A_KIND
         if (settings.five_of_a_kind && countResult.count + wildCount >= 5) {
-            return {rank: FIVE_OF_A_KIND, values: [getHighCard(values, [], 5 - wildCount)]}
+            return {rank: RANKS.FIVE_OF_A_KIND, values: [getHighCard(values, [], 5 - wildCount)]}
         }
 
         // ROYAL FLUSH / STRAIGHT FLUSH
@@ -152,9 +152,9 @@ module.exports.getHandValue = function(hand, settings) {
             var sfResult = checkStraightFlush(hand, values, suits, wildCount);
             if (sfResult.result) {
                 if (sfResult.value === "A") {
-                    return {rank: ROYAL_FLUSH}
+                    return {rank: RANKS.ROYAL_FLUSH}
                 } else {
-                    return {rank: STRAIGHT_FLUSH, values: [sfResult.value]}
+                    return {rank: RANKS.STRAIGHT_FLUSH, values: [sfResult.value]}
                 }
             }
         }
@@ -162,32 +162,32 @@ module.exports.getHandValue = function(hand, settings) {
         // FOUR_OF_A_KIND
         if (countResult.count + wildCount >= 4) {
             var quad = getHighCard(values, [], 4 - wildCount)
-            return {rank: FOUR_OF_A_KIND, values: [quad, getHighCard(values, [quad])]};
+            return {rank: RANKS.FOUR_OF_A_KIND, values: [quad, getHighCard(values, [quad])]};
         }
 
         // FULL HOUSE
         if (countResult.count + wildCount >= 3) {
             fhResult = checkFullHouse(values, wildCount);
             if (fhResult.result) {
-                return {rank: FULL_HOUSE, values: [fhResult.trip, fhResult.pair]};
+                return {rank: RANKS.FULL_HOUSE, values: [fhResult.trip, fhResult.pair]};
             }
         }
 
         // FLUSH
         if (flushResult.result) {
-            return {rank: FLUSH, values: flushResult.result};
+            return {rank: RANKS.FLUSH, values: flushResult.result};
         }
 
         // STRAIGHT
         if (straightResult.result) {
-            return {rank: STRAIGHT, values: [straightResult.value]};
+            return {rank: RANKS.STRAIGHT, values: [straightResult.value]};
         }
     }
 
     // THREE_OF_A_KIND
     if (countResult.count + wildCount >= 3) {
         var trip = getHighCard(values, [], 3 - wildCount)
-        return {rank: THREE_OF_A_KIND, values: [trip].concat(getKickers(values, handSize - 3, [trip]))};
+        return {rank: RANKS.THREE_OF_A_KIND, values: [trip].concat(getKickers(values, handSize - 3, [trip]))};
     }
 
     // PAIRS
@@ -195,20 +195,27 @@ module.exports.getHandValue = function(hand, settings) {
         // If we had two wilds, we'd have at least trips, so we must have max 1 wild.
         if (wildCount === 1) {
             // If we had a natural pair, we'd have trips, so best we can do is one pair.
-            return {rank: ONE_PAIR, values: [countResult.value].concat(getKickers(values, handSize - 2, [countResult.value]))};
+            return {rank: RANKS.ONE_PAIR, values: [countResult.value].concat(getKickers(values, handSize - 2, [countResult.value]))};
         }
         // See if we have a second natural pair.
         secondVal = getHighCard(values, [countResult.value], 2);
         if (secondVal) {
-            return {rank: TWO_PAIR, values: [countResult.value, secondVal].concat(getKickers(values, handSize - 4, [countResult.value, secondVal]))};
+            return {rank: RANKS.TWO_PAIR, values: [countResult.value, secondVal].concat(getKickers(values, handSize - 4, [countResult.value, secondVal]))};
         }
         // ONE_PAIR
-        return {rank: ONE_PAIR, values: [countResult.value].concat(getKickers(values, handSize - 2, [countResult.value]))};
+        return {rank: RANKS.ONE_PAIR, values: [countResult.value].concat(getKickers(values, handSize - 2, [countResult.value]))};
     }
     
     // HIGH CARD
-    return {rank: HIGH_CARD, values: getKickers(values, handSize, [])};
+    return {rank: RANKS.HIGH_CARD, values: getKickers(values, handSize, [])};
 }
+
+module.exports = {
+    RANKS: RANKS,
+    handToString: handToString,
+    getHandValue: getHandValue,
+    getWinner: getWinner,
+};
 
 function getKickers(values, numKickers, excludeValues) {
     var kickers = []
@@ -378,14 +385,14 @@ function checkFullHouse(values, wildCount) {
     }
     // No wilds, see if we can find a trip and a pair.
     var trip;
-    for (var val in ORDER) {
+    for (var val of ORDER) {
         if (values[val] > 2) {
             trip = val;
             break;
         }
     }
     if (trip) {
-        for (var val in ORDER) {
+        for (var val of ORDER) {
             if (val != trip && values[val] > 1) {
                 return {result: true, trip: trip, pair: val};
             }

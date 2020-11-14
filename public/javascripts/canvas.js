@@ -125,6 +125,25 @@ function isOnButton(button) {
 	return false;
 }
 
+/*
+	dpi = window.devicePixelRatio;
+	let style_height = +getComputedStyle(canvas).getPropertyValue("height").slice(0, -2);
+	let style_width = +getComputedStyle(canvas).getPropertyValue("width").slice(0, -2);
+	console.log(`${style_width} ${style_height} ${window.innerWidth} ${window.innerHeight} ${canvas.offsetWidth} ${canvas.offsetHeight}`);
+	style_height = window.innerHeight;
+	style_width = window.innerWidth;
+	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
+	if (style_height === 0 || style_width < style_height * aspect) {
+		canvas.width = style_width;
+		canvas.height = style_width / aspect;
+		r = canvas.width / 1000;
+	} else {
+		canvas.width = style_height * aspect;
+		canvas.height = style_height;
+ 		r = canvas.height * aspect / 1000;
+	}
+*/
+
 function handleResize() {
 	if (logFull) console.log("%s(%j)", arguments.callee.name, Array.prototype.slice.call(arguments).sort());
 	if (window.innerWidth < window.innerHeight * aspect) {

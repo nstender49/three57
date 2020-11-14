@@ -35,7 +35,11 @@ module.exports.listen = function(app) {
 			socket.emit("server error", "No cookie!");
 			return false;
 		}
-		socket.emit("init settings", DEBUG);
+		console.log(process.env.npm_package_version);
+		socket.emit("init settings", {
+			DEBUG: DEBUG,
+			code_version: process.env.npm_package_version,
+		});
 
 		handleNewConnection(socket);
 
