@@ -130,73 +130,66 @@ function getHandValue(hand, settings) {
     }
 
     // Check for hands in descending rank order.
-    
+
     // QAKAJ
     if (settings.qakaj && hasQAKAJ(values)) {
         return {rank: RANKS.QAKAJ}
     }
 
     // Get card with highest count and value.
-    var countResult = getLargestSet(values);
+    let countResult = getLargestSet(values);
 
-    if (hand.length >= 5) {
-        // FIVE_OF_A_KIND
-        if (settings.five_of_a_kind && countResult.count + wildCount >= 5) {
-            return {rank: RANKS.FIVE_OF_A_KIND, values: [getHighCard(values, [], 5 - wildCount)]}
-        }
+    // FIVE_OF_A_KIND
+    if (settings.five_of_a_kind && countResult.count + wildCount >= 5) {
+        return {rank: RANKS.FIVE_OF_A_KIND, values: [getHighCard(values, [], 5 - wildCount)]}
+    }
 
-        // ROYAL FLUSH / STRAIGHT FLUSH
-        var flushResult = checkFlush(suits, wildCount, hand);
-        var straightResult = checkStraight(values, wildCount);
-        if (flushResult.result && straightResult.result) {
-            var sfResult = checkStraightFlush(hand, values, suits, wildCount);
-            if (sfResult.result) {
-                if (sfResult.value === "A") {
-                    return {rank: RANKS.ROYAL_FLUSH}
-                } else {
-                    return {rank: RANKS.STRAIGHT_FLUSH, values: [sfResult.value]}
-                }
+    // ROYAL FLUSH / STRAIGHT FLUSH
+    var flushResult = checkFlush(suits, wildCount, hand);
+    var straightResult = checkStraight(values, wildCount);
+    if (flushResult.result && straightResult.result) {
+        var sfResult = checkStraightFlush(hand, values, suits, wildCount);
+        if (sfResult.result) {
+            if (sfResult.value === "A") {
+                return {rank: RANKS.ROYAL_FLUSH}
+            } else {
+                return {rank: RANKS.STRAIGHT_FLUSH, values: [sfResult.value]}
             }
         }
+    }
 
-        // FOUR_OF_A_KIND
-        if (countResult.count + wildCount >= 4) {
-            var quad = getHighCard(values, [], 4 - wildCount)
-            return {rank: RANKS.FOUR_OF_A_KIND, values: [quad, getHighCard(values, [quad])]};
-        }
+    // FOUR_OF_A_KIND
+    if (countResult.count + wildCount >= 4) {
+        let quad = getHighCard(values, [], 4 - wildCount)
+        return {rank: RANKS.FOUR_OF_A_KIND, values: [quad].concat(getKickers(values, handSize - 4, [quad]))};
+    }
 
-        // FULL HOUSE
-        if (countResult.count + wildCount >= 3) {
-            fhResult = checkFullHouse(values, wildCount);
-            if (fhResult.result) {
-                return {rank: RANKS.FULL_HOUSE, values: [fhResult.trip, fhResult.pair]};
-            }
+    // FULL HOUSE
+    if (handSize >= 5 && countResult.count + wildCount >= 3) {
+        fhResult = checkFullHouse(values, wildCount);
+        if (fhResult.result) {
+            return {rank: RANKS.FULL_HOUSE, values: [fhResult.trip, fhResult.pair]};
         }
+    }
 
-        // FLUSH
-        if (flushResult.result) {
-            return {rank: RANKS.FLUSH, values: flushResult.result};
-        }
+    // FLUSH
+    if (flushResult.result) {
+        return {rank: RANKS.FLUSH, values: flushResult.result};
+    }
 
-        // STRAIGHT
-        if (straightResult.result) {
-            return {rank: RANKS.STRAIGHT, values: [straightResult.value]};
-        }
+    // STRAIGHT
+    if (straightResult.result) {
+        return {rank: RANKS.STRAIGHT, values: [straightResult.value]};
     }
 
     // THREE_OF_A_KIND
     if (countResult.count + wildCount >= 3) {
-        var trip = getHighCard(values, [], 3 - wildCount)
-        return {rank: RANKS.THREE_OF_A_KIND, values: [trip].concat(getKickers(values, handSize - 3, [trip]))};
+        let trip = getHighCard(values, [], 3 - wildCount)
+        return {rank: RANKS.THREE_OF_A_KIND, values: [countResult.value].concat(getKickers(values, handSize - 3, [trip]))};
     }
 
     // PAIRS
     if (countResult.count + wildCount >= 2) {
-        // If we had two wilds, we'd have at least trips, so we must have max 1 wild.
-        if (wildCount === 1) {
-            // If we had a natural pair, we'd have trips, so best we can do is one pair.
-            return {rank: RANKS.ONE_PAIR, values: [countResult.value].concat(getKickers(values, handSize - 2, [countResult.value]))};
-        }
         // See if we have a second natural pair.
         secondVal = getHighCard(values, [countResult.value], 2);
         if (secondVal) {
@@ -219,7 +212,7 @@ module.exports = {
 
 function getKickers(values, numKickers, excludeValues) {
     var kickers = []
-    while (kickers.length < numKickers) {
+    while (kickers.length < numKickers && Object.keys(values).length - excludeValues.length > 0) {
         var kicker = getHighCard(values, excludeValues);
         var toAdd = Math.min(values[kicker], numKickers - kickers.length);
         for (var i = 0; i < toAdd; i++) {
@@ -227,6 +220,8 @@ function getKickers(values, numKickers, excludeValues) {
         }
         excludeValues.push(kicker);
     }
+    // If we ran out of kickers, it is because we have unused wilds. Add them to the front.
+    while (kickers.length < numKickers) kickers.unshift("A");
     return kickers;
 }
 
@@ -248,7 +243,8 @@ function hasQAKAJ(values) {
 }
 
 function getLargestSet(values) {
-    var maxValue = undefined;
+    // NOTE: if there are no values, all cards are wild, return aces as high card
+    var maxValue = "A";
     var maxCount = 0;
     for (var value in values) {
         if (!maxCount || values[value] > maxCount) {
@@ -262,6 +258,7 @@ function getLargestSet(values) {
 }
 
 function checkFlush(suits, wildCount, hand) {
+    if (hand.length < 5) return {result: false};
     var best = undefined;
     for (var suit in suits) {
         if (suits[suit] + wildCount >= 5) {
@@ -298,9 +295,8 @@ function getFlushCards(hand, suit, wildCount) {
 }
 
 function checkStraight(values, wildCount) {
-    if (wildCount >= 5) {
-        return {result: true, value: "A"}
-    }
+    if (hand.length < 5) return {result: false};
+    if (wildCount >= 5) return {result: true, value: "A"}
     for (var i = 0; i < 10; ++i) {
         var wildsLeft = wildCount;
         var failed = false;
